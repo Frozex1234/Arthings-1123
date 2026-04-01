@@ -18,7 +18,10 @@ const router = express.Router();
 // Multer configuration for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../../uploads');
+        // Vercel only allows writing to /tmp directory
+        const isVercel = process.env.VERCEL === '1';
+        const uploadDir = isVercel ? '/tmp/uploads' : path.join(__dirname, '../../uploads');
+        
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
