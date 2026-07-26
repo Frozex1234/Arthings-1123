@@ -25,6 +25,7 @@ async function main() {
         { id: 'tools', name: 'Tools & Equipment', nameUk: 'Інструменти', icon: '🔧' },
         { id: 'outdoor', name: 'Outdoor & Camping', nameUk: 'Активний відпочинок', icon: '⛺' },
         { id: 'home', name: 'Home & Garden', nameUk: 'Дім і сад', icon: '🏠' },
+        { id: 'housing', name: 'Housing', nameUk: 'Житло', icon: '🏢' },
         { id: 'sports', name: 'Sports & Fitness', nameUk: 'Спорт та фітнес', icon: '⚽' },
         { id: 'vehicles', name: 'Vehicles & Transport', nameUk: 'Транспорт', icon: '🚗' },
         { id: 'music', name: 'Music & Audio', nameUk: 'Музика та аудіо', icon: '🎸' },

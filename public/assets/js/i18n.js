@@ -73,6 +73,7 @@ const translations = {
         "category.tools": "Tools",
         "category.outdoor": "Outdoor & Camping",
         "category.home": "Home & Garden",
+        "category.housing": "Housing",
         "category.sports": "Sports & Fitness",
         "category.other": "Other",
 
@@ -341,6 +342,7 @@ const translations = {
         "category.tools": "Інструменти",
         "category.outdoor": "Активний відпочинок",
         "category.home": "Дім і сад",
+        "category.housing": "Житло",
         "category.sports": "Спорт",
         "category.other": "Інше",
 

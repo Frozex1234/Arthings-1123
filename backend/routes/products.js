@@ -15,6 +15,65 @@ const prisma = require('../db/db');
 
 const router = express.Router();
 
+function parseOptionalInteger(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseOptionalDecimal(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseBoolean(value) {
+    return value === true || value === 'true' || value === 'on';
+}
+
+function housingData(body) {
+    return {
+        address: body.address?.trim() || null,
+        housingType: body.housingType || null,
+        rooms: parseOptionalInteger(body.rooms),
+        area: parseOptionalDecimal(body.area),
+        floor: parseOptionalInteger(body.floor),
+        totalFloors: parseOptionalInteger(body.totalFloors),
+        isFurnished: body.isFurnished === undefined ? null : parseBoolean(body.isFurnished),
+        petsAllowed: body.petsAllowed === undefined ? null : parseBoolean(body.petsAllowed),
+        studentsAllowed: parseBoolean(body.studentsAllowed)
+    };
+}
+
+function formatProduct(p) {
+    return {
+        id: `prod-${p.id}`,
+        userId: `user-${p.userId}`,
+        title: p.title,
+        description: p.description,
+        category: p.category,
+        price: Number(p.pricePerDay),
+        priceUnit: p.priceUnit,
+        city: p.city,
+        address: p.address,
+        housingType: p.housingType,
+        rooms: p.rooms,
+        area: p.area === null ? null : Number(p.area),
+        floor: p.floor,
+        totalFloors: p.totalFloors,
+        isFurnished: p.isFurnished,
+        petsAllowed: p.petsAllowed,
+        studentsAllowed: p.studentsAllowed,
+        available: p.isAvailable,
+        images: p.images.map(img => img.imagePath),
+        views: p.views,
+        createdAt: p.createdAt.toISOString(),
+        ownerName: p.user?.name || 'Unknown',
+        ownerCity: p.user?.city || '',
+        ownerPhone: p.user?.phone || ''
+    };
+}
+
 // Multer configuration for image uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -49,7 +108,7 @@ const upload = multer({
  */
 router.get('/', async (req, res) => {
     try {
-        const { search, category, minPrice, maxPrice, available, city, userId, sort } = req.query;
+        const { search, category, minPrice, maxPrice, available, city, userId, sort, housingType, minRooms, maxRooms, furnished, petsAllowed, studentsAllowed } = req.query;
 
         // Build where clause
         const where = {};
@@ -83,6 +142,16 @@ router.get('/', async (req, res) => {
         if (city) {
             where.city = { equals: city, mode: 'insensitive' };
         }
+
+        if (housingType) where.housingType = housingType;
+        if (minRooms || maxRooms) {
+            where.rooms = {};
+            if (minRooms) where.rooms.gte = parseInt(minRooms, 10);
+            if (maxRooms) where.rooms.lte = parseInt(maxRooms, 10);
+        }
+        if (furnished !== undefined) where.isFurnished = furnished === 'true';
+        if (petsAllowed !== undefined) where.petsAllowed = petsAllowed === 'true';
+        if (studentsAllowed !== undefined) where.studentsAllowed = studentsAllowed === 'true';
 
         // Filter by user (for my-listings)
         if (userId) {
@@ -129,22 +198,7 @@ router.get('/', async (req, res) => {
         });
 
         // Transform to match expected format
-        const formattedProducts = products.map(p => ({
-            id: `prod-${p.id}`,
-            userId: `user-${p.userId}`,
-            title: p.title,
-            description: p.description,
-            category: p.category,
-            price: Number(p.pricePerDay),
-            priceUnit: p.priceUnit,
-            city: p.city,
-            available: p.isAvailable,
-            images: p.images.map(img => img.imagePath),
-            views: p.views,
-            createdAt: p.createdAt.toISOString(),
-            ownerName: p.user?.name || 'Unknown',
-            ownerCity: p.user?.city || ''
-        }));
+        const formattedProducts = products.map(formatProduct);
 
         res.json({ products: formattedProducts, total: formattedProducts.length });
 
@@ -192,25 +246,7 @@ router.get('/:id', async (req, res) => {
             data: { views: { increment: 1 } }
         });
 
-        res.json({
-            product: {
-                id: `prod-${product.id}`,
-                userId: `user-${product.userId}`,
-                title: product.title,
-                description: product.description,
-                category: product.category,
-                price: Number(product.pricePerDay),
-                priceUnit: product.priceUnit,
-                city: product.city,
-                available: product.isAvailable,
-                images: product.images.map(img => img.imagePath),
-                views: product.views + 1,
-                createdAt: product.createdAt.toISOString(),
-                ownerName: product.user?.name || 'Unknown',
-                ownerCity: product.user?.city || '',
-                ownerPhone: product.user?.phone || ''
-            }
-        });
+        res.json({ product: { ...formatProduct(product), views: product.views + 1 } });
 
     } catch (error) {
         console.error('Get product error:', error);
@@ -247,6 +283,7 @@ router.post('/', upload.array('images', 5), async (req, res) => {
                     priceUnit: priceUnit || 'day',
                     category,
                     city: city || null,
+                    ...housingData(req.body),
                     isAvailable: true,
                     views: 0
                 }
@@ -274,23 +311,7 @@ router.post('/', upload.array('images', 5), async (req, res) => {
             include: { images: { orderBy: { sortOrder: 'asc' } } }
         });
 
-        res.status(201).json({
-            message: 'Product created successfully',
-            product: {
-                id: `prod-${productWithImages.id}`,
-                userId: `user-${productWithImages.userId}`,
-                title: productWithImages.title,
-                description: productWithImages.description,
-                category: productWithImages.category,
-                price: Number(productWithImages.pricePerDay),
-                priceUnit: productWithImages.priceUnit,
-                city: productWithImages.city,
-                available: productWithImages.isAvailable,
-                images: productWithImages.images.map(img => img.imagePath),
-                views: productWithImages.views,
-                createdAt: productWithImages.createdAt.toISOString()
-            }
-        });
+        res.status(201).json({ message: 'Product created successfully', product: formatProduct(productWithImages) });
 
     } catch (error) {
         console.error('Create product error:', error);
@@ -345,6 +366,7 @@ router.put('/:id', upload.array('images', 5), async (req, res) => {
                     ...(price && { pricePerDay: parseFloat(price) }),
                     ...(priceUnit && { priceUnit }),
                     ...(city !== undefined && { city: city || null }),
+                    ...(req.body.address !== undefined && housingData(req.body)),
                     ...(available !== undefined && { isAvailable: available === 'true' || available === true })
                 }
             });
@@ -378,23 +400,7 @@ router.put('/:id', upload.array('images', 5), async (req, res) => {
             include: { images: { orderBy: { sortOrder: 'asc' } } }
         });
 
-        res.json({
-            message: 'Product updated successfully',
-            product: {
-                id: `prod-${productWithImages.id}`,
-                userId: `user-${productWithImages.userId}`,
-                title: productWithImages.title,
-                description: productWithImages.description,
-                category: productWithImages.category,
-                price: Number(productWithImages.pricePerDay),
-                priceUnit: productWithImages.priceUnit,
-                city: productWithImages.city,
-                available: productWithImages.isAvailable,
-                images: productWithImages.images.map(img => img.imagePath),
-                views: productWithImages.views,
-                createdAt: productWithImages.createdAt.toISOString()
-            }
-        });
+        res.json({ message: 'Product updated successfully', product: formatProduct(productWithImages) });
 
     } catch (error) {
         console.error('Update product error:', error);

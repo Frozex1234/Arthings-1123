@@ -184,6 +184,16 @@
                             <span data-i18n="filters.available">Available only</span>
                         </label>
                     </div>
+                    <div class="filter-group" id="housing-filter-students">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="filter-students-allowed">
+                            <span>🎓 Можна студентам</span>
+                        </label>
+                    </div>
+                    <div class="filter-group" id="housing-filter-rooms">
+                        <label class="filter-label">Кімнат від</label>
+                        <input type="number" id="filter-min-rooms" class="form-input" min="0" placeholder="1">
+                    </div>
                 </div>
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
                     <button id="clear-filters" class="btn btn-ghost" data-i18n="filters.clear">Clear All</button>
@@ -321,6 +331,8 @@
                 if (params.maxPrice) queryParams.set('maxPrice', params.maxPrice);
                 if (params.sort) queryParams.set('sort', params.sort);
                 if (params.available) queryParams.set('available', 'true');
+                if (params.studentsAllowed) queryParams.set('studentsAllowed', 'true');
+                if (params.minRooms) queryParams.set('minRooms', params.minRooms);
 
                 const queryString = queryParams.toString();
                 const data = await api.get(`/api/products${queryString ? '?' + queryString : ''}`);
@@ -469,6 +481,8 @@
                 document.getElementById('filter-max-price').value = '';
                 document.getElementById('filter-sort').value = 'newest';
                 document.getElementById('filter-available').checked = false;
+                document.getElementById('filter-students-allowed').checked = false;
+                document.getElementById('filter-min-rooms').value = '';
 
                 // Reset category pills
                 document.querySelectorAll('.category-pill').forEach(p => p.classList.remove('active'));
@@ -502,6 +516,8 @@
                 maxPrice: document.getElementById('filter-max-price').value,
                 sort: document.getElementById('filter-sort').value,
                 available: document.getElementById('filter-available').checked
+                , studentsAllowed: document.getElementById('filter-students-allowed').checked
+                , minRooms: document.getElementById('filter-min-rooms').value
             };
 
             loadProducts(params);

@@ -247,11 +247,28 @@
                         <p>${escapeHtml(product.description)}</p>
                     </div>
 
+                    ${product.category === 'housing' ? `
+                        <div class="housing-details">
+                            <h3>Характеристики житла</h3>
+                            <div class="housing-details-grid">
+                                ${product.housingType ? `<span>🏠 ${({ apartment: 'Квартира', room: 'Кімната', house: 'Будинок', studio: 'Студія' })[product.housingType] || product.housingType}</span>` : ''}
+                                ${product.rooms !== null ? `<span>🚪 ${product.rooms} кімн.</span>` : ''}
+                                ${product.area !== null ? `<span>📐 ${product.area} м²</span>` : ''}
+                                ${product.floor !== null ? `<span>🏢 ${product.floor}${product.totalFloors ? '/' + product.totalFloors : ''} поверх</span>` : ''}
+                                ${product.address ? `<span>📍 ${escapeHtml(product.address)}</span>` : ''}
+                                ${product.isFurnished ? '<span>🛋️ Мебльоване</span>' : ''}
+                                ${product.petsAllowed ? '<span>🐾 Можна з тваринами</span>' : ''}
+                                ${product.studentsAllowed ? '<span class="students-badge">🎓 Можна студентам</span>' : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+
                     ${!isOwner ? `
                         <div class="product-actions">
                             <a href="/pages/rent.html?id=${product.id}" class="btn btn-primary btn-lg" ${!product.available ? 'style="pointer-events: none; opacity: 0.5;"' : ''}>
                                 ${product.available ? i18n.t('product.rentNow') : i18n.t('product.notAvailable')}
                             </a>
+                            <button class="btn btn-outline btn-lg" onclick="openChat()">💬 Написати власнику</button>
                             <button class="btn btn-outline btn-lg" id="favorite-btn" onclick="handleFavorite()">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="${isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -318,6 +335,14 @@
             }
         }
 
+        function openChat() {
+            if (!currentUser) {
+                window.location.href = `/pages/login.html?return=${encodeURIComponent(`/pages/item.html?id=${product.id}`)}`;
+                return;
+            }
+            window.location.href = `/pages/messages.html?user=${product.userId}&item=${product.id}`;
+        }
+
         function editProduct() {
             // For simplicity, redirect to a simple edit mode
             // In a full implementation, this would open an edit form
@@ -369,6 +394,13 @@
             });
         });
     </script>
+    <style>
+        .housing-details { margin: 1.5rem 0; padding: 1.25rem; border-radius: var(--radius-lg); background: var(--color-gray-50); }
+        .housing-details h3 { margin: 0 0 .85rem; }
+        .housing-details-grid { display: flex; flex-wrap: wrap; gap: .65rem; }
+        .housing-details-grid span { padding: .45rem .7rem; border-radius: var(--radius-md); background: white; color: var(--color-gray-700); }
+        .housing-details-grid .students-badge { background: #eef2ff; color: #4338ca; font-weight: 700; }
+    </style>
 </body>
 
 </html>

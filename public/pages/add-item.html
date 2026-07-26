@@ -139,6 +139,24 @@
                         </select>
                     </div>
 
+                    <div id="housing-fields" class="housing-fields hidden">
+                        <h3>Деталі житла</h3>
+                        <p>Ці параметри допоможуть орендарям швидше знайти ваше оголошення.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group"><label class="form-label" for="housing-type">Тип житла</label><select id="housing-type" class="form-input form-select"><option value="">Не вказано</option><option value="apartment">Квартира</option><option value="room">Кімната</option><option value="house">Будинок</option><option value="studio">Студія</option></select></div>
+                            <div class="form-group"><label class="form-label" for="address">Адреса / район</label><input id="address" class="form-input" maxlength="255" placeholder="Напр., Шевченківський район"></div>
+                            <div class="form-group"><label class="form-label" for="rooms">Кількість кімнат</label><input id="rooms" type="number" min="0" max="50" class="form-input" placeholder="1"></div>
+                            <div class="form-group"><label class="form-label" for="area">Площа, м²</label><input id="area" type="number" min="0" step="0.1" class="form-input" placeholder="45"></div>
+                            <div class="form-group"><label class="form-label" for="floor">Поверх</label><input id="floor" type="number" min="0" max="200" class="form-input" placeholder="4"></div>
+                            <div class="form-group"><label class="form-label" for="total-floors">Поверхів у будинку</label><input id="total-floors" type="number" min="1" max="200" class="form-input" placeholder="9"></div>
+                        </div>
+                        <div class="housing-options">
+                            <label class="checkbox-label"><input id="is-furnished" type="checkbox"><span>Мебльоване</span></label>
+                            <label class="checkbox-label"><input id="pets-allowed" type="checkbox"><span>Можна з тваринами</span></label>
+                            <label class="checkbox-label student-option"><input id="students-allowed" type="checkbox"><span>Можна студентам</span></label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label" data-i18n="addItem.images">Photos</label>
                         <div class="file-upload" id="file-upload-zone">
@@ -222,6 +240,7 @@
             }
 
             // File upload handling
+            document.getElementById('category').addEventListener('change', toggleHousingFields);
             const fileInput = document.getElementById('images');
             const uploadZone = document.getElementById('file-upload-zone');
 
@@ -315,6 +334,17 @@
                     formData.append('category', category);
                     formData.append('price', price);
                     formData.append('city', city);
+                    if (category === 'housing') {
+                        formData.append('housingType', document.getElementById('housing-type').value);
+                        formData.append('address', document.getElementById('address').value.trim());
+                        formData.append('rooms', document.getElementById('rooms').value);
+                        formData.append('area', document.getElementById('area').value);
+                        formData.append('floor', document.getElementById('floor').value);
+                        formData.append('totalFloors', document.getElementById('total-floors').value);
+                        formData.append('isFurnished', document.getElementById('is-furnished').checked);
+                        formData.append('petsAllowed', document.getElementById('pets-allowed').checked);
+                        formData.append('studentsAllowed', document.getElementById('students-allowed').checked);
+                    }
 
                     selectedFiles.forEach(file => {
                         formData.append('images', file);
@@ -373,6 +403,10 @@
             selectedFiles.splice(index, 1);
             renderImagePreview();
         }
+
+        function toggleHousingFields() {
+            document.getElementById('housing-fields').classList.toggle('hidden', document.getElementById('category').value !== 'housing');
+        }
     </script>
 
     <style>
@@ -415,6 +449,12 @@
         .preview-remove:hover {
             background: var(--color-error);
         }
+
+        .housing-fields { padding: 1.25rem; margin-bottom: 1.5rem; border: 1px solid var(--color-gray-200); border-radius: var(--radius-lg); background: var(--color-gray-50); }
+        .housing-fields h3 { margin: 0; }
+        .housing-fields p { margin: .35rem 0 1.25rem; color: var(--color-gray-600); font-size: .9rem; }
+        .housing-options { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; }
+        .student-option { color: var(--color-primary-dark, var(--color-primary)); font-weight: 600; }
 
         @media (max-width: 600px) {
             .card {

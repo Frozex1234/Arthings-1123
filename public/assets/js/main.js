@@ -135,6 +135,27 @@ function updateAuthUI() {
             el.classList.add('hidden');
         }
     });
+
+    // Make the inbox reachable from every page that uses the shared navigation.
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        if (currentUser && !menu.querySelector('[href="/pages/messages.html"]')) {
+            const link = document.createElement('a');
+            link.href = '/pages/messages.html';
+            link.textContent = '💬 Повідомлення';
+            const divider = menu.querySelector('hr');
+            menu.insertBefore(link, divider || null);
+        }
+    });
+    document.querySelectorAll('#mobile-user-links').forEach(menu => {
+        if (currentUser && !menu.querySelector('[href="/pages/messages.html"]')) {
+            const link = document.createElement('a');
+            link.href = '/pages/messages.html';
+            link.className = 'mobile-nav-link';
+            link.textContent = '💬 Повідомлення';
+            const logout = menu.querySelector('.logout-btn');
+            menu.insertBefore(link, logout || null);
+        }
+    });
 }
 
 async function logout() {

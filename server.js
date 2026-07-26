@@ -26,6 +26,7 @@ const legalRoutes = require('./backend/routes/legal');
 const adminRoutes = require('./backend/routes/admin');
 const ratingsRoutes = require('./backend/routes/ratings');
 const rentalRequestsRoutes = require('./backend/routes/rental-requests');
+const messagesRoutes = require('./backend/routes/messages');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,6 +61,7 @@ app.use('/api/favorites', favoritesRoutes);
 app.use('/api/rentals', rentalsRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/rental-requests', rentalRequestsRoutes);
+app.use('/api/messages', messagesRoutes);
 app.use('/api/legal', legalRoutes);
 app.use('/api/admin', adminRoutes);
 

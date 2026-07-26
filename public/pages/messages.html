@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Повідомлення — Arthings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/main.css"><link rel="icon" type="image/png" href="/assets/images/logo.png">
+</head>
+<body>
+    <nav class="navbar"><div class="navbar-container"><a href="/" class="navbar-brand"><img src="/assets/images/logo.png" alt="Arthings" class="navbar-logo"><span class="navbar-title">Arthings</span></a><div class="navbar-nav"><a href="/" class="nav-link">Головна</a></div><div class="navbar-actions"><div id="auth-links"><a href="/pages/login.html" class="btn btn-ghost">Увійти</a></div><div id="user-links" class="hidden"><a href="/pages/add-item.html" class="btn btn-primary">Додати оголошення</a><div class="user-dropdown"><button class="btn btn-ghost user-menu-btn"><span id="user-name">User</span></button><div class="dropdown-menu"><a href="/pages/profile.html">Профіль</a><a href="/pages/messages.html">Повідомлення</a><hr><a href="#" class="logout-btn">Вийти</a></div></div></div></div></div></nav>
+    <main class="section"><div class="container messages-layout"><aside class="conversations"><h1>Повідомлення</h1><div id="conversation-list"><p class="muted">Завантаження…</p></div></aside><section class="chat-panel"><div id="chat-header" class="chat-header">Оберіть діалог</div><div id="messages" class="messages"><p class="muted">Тут з’являться ваші повідомлення.</p></div><form id="message-form" class="message-form hidden"><textarea id="message-body" class="form-input" maxlength="2000" placeholder="Напишіть повідомлення…" required></textarea><button class="btn btn-primary" type="submit">Надіслати</button></form></section></div></main>
+    <div id="toast-container" class="toast-container"></div>
+    <script src="/assets/js/i18n.js"></script><script src="/assets/js/main.js"></script>
+    <script>
+        let selected = null;
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth();
+            if (!user) { window.location.href = '/pages/login.html?return=/pages/messages.html'; return; }
+            const targetUser = new URLSearchParams(location.search).get('user');
+            const itemId = new URLSearchParams(location.search).get('item');
+            if (targetUser) selected = { userId: targetUser, itemId };
+            await loadConversations();
+            if (selected) await openConversation(selected);
+            document.getElementById('message-form').addEventListener('submit', sendMessage);
+            setInterval(() => { if (selected) loadMessages(false); loadConversations(); }, 15000);
+        });
+        async function loadConversations() {
+            try {
+                const data = await api.get('/api/messages/conversations');
+                const list = document.getElementById('conversation-list');
+                list.innerHTML = data.conversations.length ? '' : '<p class="muted">Діалогів поки немає.</p>';
+                data.conversations.forEach(c => {
+                    const button = document.createElement('button'); button.className = 'conversation' + (selected && selected.userId === c.userId && (selected.itemId || '') === (c.itemId || '') ? ' active' : '');
+                    button.innerHTML = `<strong>${escapeHtml(c.userName)}</strong>${c.itemTitle ? `<small>${escapeHtml(c.itemTitle)}</small>` : ''}<span>${escapeHtml(c.lastMessage)}</span>${c.unread ? '<b>●</b>' : ''}`;
+                    button.onclick = () => openConversation(c); list.appendChild(button);
+                });
+            } catch (error) { showToast('error', error.message); }
+        }
+        async function openConversation(conversation) {
+            selected = { userId: conversation.userId, itemId: conversation.itemId || null, userName: conversation.userName, itemTitle: conversation.itemTitle };
+            document.getElementById('chat-header').textContent = selected.userName || 'Новий діалог';
+            document.getElementById('message-form').classList.remove('hidden');
+            await loadMessages(); await loadConversations();
+        }
+        async function loadMessages(scroll = true) {
+            if (!selected) return;
+            try {
+                const query = selected.itemId ? `?itemId=${encodeURIComponent(selected.itemId)}` : '';
+                const data = await api.get(`/api/messages/${selected.userId}${query}`);
+                const box = document.getElementById('messages');
+                box.innerHTML = data.messages.length ? '' : '<p class="muted">Почніть розмову — надішліть перше повідомлення.</p>';
+                data.messages.forEach(message => { const el = document.createElement('div'); el.className = 'message ' + (message.senderId === currentUser.id ? 'mine' : 'theirs'); el.innerHTML = `<p>${escapeHtml(message.body)}</p><small>${new Date(message.createdAt).toLocaleString('uk-UA')}</small>`; box.appendChild(el); });
+                if (scroll) box.scrollTop = box.scrollHeight;
+            } catch (error) { showToast('error', error.message); }
+        }
+        async function sendMessage(event) {
+            event.preventDefault(); if (!selected) return;
+            const input = document.getElementById('message-body'); const body = input.value.trim(); if (!body) return;
+            try { await api.post('/api/messages', { recipientId: selected.userId, itemId: selected.itemId, body }); input.value = ''; await loadMessages(); await loadConversations(); } catch (error) { showToast('error', error.message); }
+        }
+    </script>
+    <style>
+      .messages-layout { display:grid; grid-template-columns:300px 1fr; min-height:65vh; border:1px solid var(--color-gray-200); border-radius:var(--radius-xl); overflow:hidden; background:white; }
+      .conversations { border-right:1px solid var(--color-gray-200); padding:1rem; } .conversations h1 { font-size:1.4rem; margin:.25rem 0 1rem; }
+      .conversation { position:relative; display:flex; flex-direction:column; gap:.2rem; width:100%; padding:.8rem; text-align:left; border:0; border-radius:var(--radius-md); background:transparent; cursor:pointer; }.conversation:hover,.conversation.active{background:var(--color-gray-100)} .conversation small,.conversation span,.muted{color:var(--color-gray-600)} .conversation span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem}.conversation b{position:absolute;right:.65rem;top:.7rem;color:var(--color-primary)}
+      .chat-panel{display:flex;flex-direction:column}.chat-header{padding:1rem 1.25rem;font-weight:700;border-bottom:1px solid var(--color-gray-200)}.messages{flex:1;padding:1rem 1.25rem;overflow:auto;display:flex;flex-direction:column;gap:.7rem}.message{max-width:75%;padding:.65rem .8rem;border-radius:var(--radius-lg);background:var(--color-gray-100)}.message.mine{align-self:flex-end;background:var(--color-primary);color:white}.message p{margin:0;white-space:pre-wrap}.message small{display:block;margin-top:.25rem;font-size:.7rem;opacity:.75}.message-form{display:flex;gap:.75rem;padding:1rem;border-top:1px solid var(--color-gray-200)}.message-form textarea{min-height:44px;resize:vertical}@media(max-width:700px){.messages-layout{grid-template-columns:1fr}.conversations{border-right:0;border-bottom:1px solid var(--color-gray-200)}.messages{min-height:40vh}.message-form{align-items:flex-end}}
+    </style>
+</body></html>

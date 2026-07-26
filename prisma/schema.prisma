@@ -39,6 +39,8 @@ model User {
   ratingsGiven       Rating[]        @relation("RatingFrom")
   ratingsReceived    Rating[]        @relation("RatingTo")
   rentalRequests     RentalRequest[]
+  messagesSent       Message[]       @relation("MessagesSent")
+  messagesReceived   Message[]       @relation("MessagesReceived")
 
   @@map("users")
 }
@@ -57,6 +59,15 @@ model Item {
   priceUnit   String   @default("day") @map("price_unit") @db.VarChar(20)
   category    String   @db.VarChar(50)
   city        String?  @db.VarChar(100)
+  address     String?  @db.VarChar(255)
+  housingType String?  @map("housing_type") @db.VarChar(30)
+  rooms       Int?
+  area        Decimal? @db.Decimal(8, 2)
+  floor       Int?
+  totalFloors Int?     @map("total_floors")
+  isFurnished Boolean? @map("is_furnished")
+  petsAllowed Boolean? @map("pets_allowed")
+  studentsAllowed Boolean @default(false) @map("students_allowed")
   isAvailable Boolean  @default(true) @map("is_available")
   views       Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
@@ -67,11 +78,37 @@ model Item {
   images    ItemImage[]
   rentals   Rental[]
   favorites Favorite[]
+  messages  Message[]
 
   @@index([userId])
   @@index([category])
   @@index([city])
+  @@index([studentsAllowed])
   @@map("items")
+}
+
+// ===========================================
+// Message Model
+// ===========================================
+// Private messages between platform users. A message can be linked to a listing.
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int      @map("sender_id")
+  recipientId Int     @map("recipient_id")
+  itemId     Int?     @map("item_id")
+  body       String   @db.Text
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  sender    User  @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User  @relation("MessagesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  item      Item? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, recipientId, createdAt])
+  @@index([recipientId, readAt])
+  @@index([itemId])
+  @@map("messages")
 }
 
 // ===========================================
