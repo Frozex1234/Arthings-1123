@@ -7,6 +7,10 @@ const translations = {
     en: {
         // Navigation
         "nav.home": "Home",
+        "nav.rentItems": "Rent Items",
+        "nav.rentHousing": "Rent Housing",
+        "nav.requests": "Requests",
+        "nav.notifications": "Notifications",
         "nav.howItWorks": "How it Works",
         "nav.about": "About",
         "nav.contact": "Contact",
@@ -102,6 +106,7 @@ const translations = {
         "auth.login.submit": "Sign In",
         "auth.login.noAccount": "Don't have an account?",
         "auth.login.register": "Sign up",
+        "auth.login.forgot": "Forgot your password?",
         "auth.register.title": "Create Account",
         "auth.register.subtitle": "Join our community today",
         "auth.register.name": "Full Name",
@@ -276,6 +281,10 @@ const translations = {
     uk: {
         // Navigation
         "nav.home": "Головна",
+        "nav.rentItems": "Оренда речей",
+        "nav.rentHousing": "Оренда житла",
+        "nav.requests": "Запити",
+        "nav.notifications": "Сповіщення",
         "nav.howItWorks": "Як це працює",
         "nav.about": "Про нас",
         "nav.contact": "Контакти",
@@ -371,6 +380,7 @@ const translations = {
         "auth.login.submit": "Увійти",
         "auth.login.noAccount": "Немає акаунту?",
         "auth.login.register": "Зареєструватися",
+        "auth.login.forgot": "Забули пароль?",
         "auth.register.title": "Створити акаунт",
         "auth.register.subtitle": "Приєднуйтесь до нашої спільноти",
         "auth.register.name": "Повне ім'я",

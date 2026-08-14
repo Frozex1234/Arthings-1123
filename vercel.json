@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "buildCommand": "prisma generate",
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "/public/assets/$1",
+      "headers": { "cache-control": "public, max-age=86400" }
+    },
+    { "src": "/components/(.*)", "dest": "/public/components/$1" },
+    { "src": "/(.*)", "dest": "/api/index.js" }
+  ]
+}

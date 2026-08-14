@@ -1,466 +1,418 @@
 /**
  * ===========================================
- * Arthings - Products/Items Routes
+ * Arthings - Listing Routes
  * ===========================================
- * 
- * Handles CRUD operations for rentable items
+ *
+ * CRUD and search for both rentable items and housing. The `listingType`
+ * discriminator decides which set of attributes applies; everything else
+ * (images, ownership, geocoding, availability) is shared.
  */
 
 const express = require('express');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
-const path = require('path');
 const prisma = require('../db/db');
+const listings = require('../services/listings');
+const geocoding = require('../services/geocoding');
+const storage = require('../services/storage');
+const { validate } = require('../middleware/validate');
+const { limiters } = require('../middleware/security');
+const { requireAuth, requireVerifiedEmail } = require('../middleware/auth');
+const schemas = require('../validators/listings');
 
 const router = express.Router();
 
-function parseOptionalInteger(value) {
-    if (value === undefined || value === null || value === '') return null;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
+/** Address fields that, when changed, invalidate stored coordinates. */
+const ADDRESS_KEYS = ['country', 'region', 'district', 'city', 'village', 'street', 'houseNumber', 'postcode'];
 
-function parseOptionalDecimal(value) {
-    if (value === undefined || value === null || value === '') return null;
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function parseBoolean(value) {
-    return value === true || value === 'true' || value === 'on';
-}
-
-function housingData(body) {
-    return {
-        address: body.address?.trim() || null,
-        housingType: body.housingType || null,
-        rooms: parseOptionalInteger(body.rooms),
-        area: parseOptionalDecimal(body.area),
-        floor: parseOptionalInteger(body.floor),
-        totalFloors: parseOptionalInteger(body.totalFloors),
-        isFurnished: body.isFurnished === undefined ? null : parseBoolean(body.isFurnished),
-        petsAllowed: body.petsAllowed === undefined ? null : parseBoolean(body.petsAllowed),
-        studentsAllowed: parseBoolean(body.studentsAllowed)
-    };
-}
-
-function formatProduct(p) {
-    return {
-        id: `prod-${p.id}`,
-        userId: `user-${p.userId}`,
-        title: p.title,
-        description: p.description,
-        category: p.category,
-        price: Number(p.pricePerDay),
-        priceUnit: p.priceUnit,
-        city: p.city,
-        address: p.address,
-        housingType: p.housingType,
-        rooms: p.rooms,
-        area: p.area === null ? null : Number(p.area),
-        floor: p.floor,
-        totalFloors: p.totalFloors,
-        isFurnished: p.isFurnished,
-        petsAllowed: p.petsAllowed,
-        studentsAllowed: p.studentsAllowed,
-        available: p.isAvailable,
-        images: p.images.map(img => img.imagePath),
-        views: p.views,
-        createdAt: p.createdAt.toISOString(),
-        ownerName: p.user?.name || 'Unknown',
-        ownerCity: p.user?.city || '',
-        ownerPhone: p.user?.phone || ''
-    };
-}
-
-// Multer configuration for image uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../../uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueName = uuidv4() + path.extname(file.originalname);
-        cb(null, uniqueName);
+function pickAddress(source) {
+    const address = {};
+    for (const key of ADDRESS_KEYS) {
+        if (source[key] !== undefined) address[key] = source[key];
     }
-});
+    return address;
+}
 
-const upload = multer({
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (allowedTypes.includes(file.mimetype)) {
-            cb(null, true);
-        } else {
-            cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
-        }
+/** Housing attributes only apply to housing listings. */
+const HOUSING_KEYS = [
+    'housingCategory', 'rentalPeriod', 'housingType', 'rooms', 'area', 'floor',
+    'totalFloors', 'maxGuests', 'isFurnished', 'petsAllowed', 'smokingAllowed',
+    'hasInternet', 'hasParking', 'utilitiesIncluded', 'studentsAllowed'
+];
+
+function pickHousing(source, listingType) {
+    const data = {};
+    for (const key of HOUSING_KEYS) {
+        if (source[key] === undefined) continue;
+        // Silently dropping these on item listings keeps the data honest:
+        // an "apartment" bicycle should not be storable.
+        if (listingType !== 'housing' && key !== 'studentsAllowed') continue;
+        data[key] = source[key];
+    }
+    return data;
+}
+
+/**
+ * Resolves coordinates for an address, returning the columns to persist.
+ * A geocoding failure is non-fatal — the listing saves without a pin.
+ */
+async function resolveCoordinates(address) {
+    const result = await geocoding.geocodeAddress(address);
+    if (!result) {
+        return { latitude: null, longitude: null, geocodedAt: null, geocodeAccuracy: null, geocodeQuery: null };
+    }
+    return {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        geocodedAt: new Date(),
+        geocodeAccuracy: result.accuracy,
+        geocodeQuery: result.query?.slice(0, 500) ?? null
+    };
+}
+
+/** Loads a listing and asserts the caller owns it. */
+async function loadOwnedListing(itemId, userId) {
+    const item = await prisma.item.findUnique({
+        where: { id: itemId },
+        include: { images: true }
+    });
+
+    if (!item) return { error: { status: 404, message: 'Listing not found' } };
+    if (item.userId !== userId) {
+        return { error: { status: 403, message: 'You can only modify your own listings' } };
+    }
+    return { item };
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/products
+ * Paginated listing search.
+ */
+router.get('/', validate({ query: schemas.list }), async (req, res) => {
+    try {
+        const result = await listings.search(req.query);
+        res.json(result);
+    } catch (error) {
+        console.error('Get listings error:', error);
+        res.status(500).json({ error: 'Failed to load listings' });
     }
 });
 
 /**
- * GET /api/products
- * Get all products with optional filtering
+ * GET /api/products/map
+ * Marker payloads for the map, by viewport or radius.
+ *
+ * Declared before `/:id` so the literal path is not swallowed by the
+ * parameterised route.
  */
-router.get('/', async (req, res) => {
+router.get('/map', validate({ query: schemas.mapQuery }), async (req, res) => {
     try {
-        const { search, category, minPrice, maxPrice, available, city, userId, sort, housingType, minRooms, maxRooms, furnished, petsAllowed, studentsAllowed } = req.query;
-
-        // Build where clause
-        const where = {};
-
-        // Filter by search query (title and description)
-        if (search) {
-            where.OR = [
-                { title: { contains: search } },
-                { description: { contains: search } }
-            ];
-        }
-
-        // Filter by category
-        if (category) {
-            where.category = category;
-        }
-
-        // Filter by price range
-        if (minPrice || maxPrice) {
-            where.pricePerDay = {};
-            if (minPrice) where.pricePerDay.gte = parseFloat(minPrice);
-            if (maxPrice) where.pricePerDay.lte = parseFloat(maxPrice);
-        }
-
-        // Filter by availability
-        if (available !== undefined) {
-            where.isAvailable = available === 'true';
-        }
-
-        // Filter by city
-        if (city) {
-            where.city = { equals: city, mode: 'insensitive' };
-        }
-
-        if (housingType) where.housingType = housingType;
-        if (minRooms || maxRooms) {
-            where.rooms = {};
-            if (minRooms) where.rooms.gte = parseInt(minRooms, 10);
-            if (maxRooms) where.rooms.lte = parseInt(maxRooms, 10);
-        }
-        if (furnished !== undefined) where.isFurnished = furnished === 'true';
-        if (petsAllowed !== undefined) where.petsAllowed = petsAllowed === 'true';
-        if (studentsAllowed !== undefined) where.studentsAllowed = studentsAllowed === 'true';
-
-        // Filter by user (for my-listings)
-        if (userId) {
-            // Handle both "user-123" format and numeric ID
-            const numericId = userId.startsWith('user-')
-                ? parseInt(userId.replace('user-', ''))
-                : parseInt(userId);
-            if (!isNaN(numericId)) {
-                where.userId = numericId;
-            }
-        }
-
-        // Build orderBy
-        let orderBy = { createdAt: 'desc' }; // Default: newest first
-        if (sort) {
-            switch (sort) {
-                case 'price-asc':
-                    orderBy = { pricePerDay: 'asc' };
-                    break;
-                case 'price-desc':
-                    orderBy = { pricePerDay: 'desc' };
-                    break;
-                case 'newest':
-                    orderBy = { createdAt: 'desc' };
-                    break;
-                case 'popular':
-                    orderBy = { views: 'desc' };
-                    break;
-            }
-        }
-
-        // Fetch products with relations
-        const products = await prisma.item.findMany({
-            where,
-            orderBy,
-            include: {
-                user: {
-                    select: { id: true, name: true, city: true }
-                },
-                images: {
-                    orderBy: { sortOrder: 'asc' }
-                }
-            }
-        });
-
-        // Transform to match expected format
-        const formattedProducts = products.map(formatProduct);
-
-        res.json({ products: formattedProducts, total: formattedProducts.length });
-
+        const result = await listings.searchMap(req.query);
+        res.json(result);
     } catch (error) {
-        console.error('Get products error:', error);
-        res.status(500).json({ error: 'Failed to get products' });
+        console.error('Map search error:', error);
+        res.status(500).json({ error: 'Failed to load map listings' });
     }
 });
 
 /**
  * GET /api/products/:id
- * Get single product by ID
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', validate({ params: schemas.idParam }), async (req, res) => {
     try {
-        // Handle both "prod-123" format and numeric ID
-        const idParam = req.params.id;
-        const numericId = idParam.startsWith('prod-')
-            ? parseInt(idParam.replace('prod-', ''))
-            : parseInt(idParam);
-
-        if (isNaN(numericId)) {
-            return res.status(400).json({ error: 'Invalid product ID' });
-        }
-
-        const product = await prisma.item.findUnique({
-            where: { id: numericId },
-            include: {
-                user: {
-                    select: { id: true, name: true, city: true, phone: true }
-                },
-                images: {
-                    orderBy: { sortOrder: 'asc' }
-                }
-            }
+        const item = await prisma.item.findUnique({
+            where: { id: req.params.id },
+            include: listings.LISTING_INCLUDE
         });
 
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
+        if (!item) return res.status(404).json({ error: 'Listing not found' });
 
-        // Increment view count
-        await prisma.item.update({
-            where: { id: numericId },
-            data: { views: { increment: 1 } }
-        });
+        // View counting is incidental to the response; do not make the reader
+        // wait on it or fail the request if it errors.
+        prisma.item
+            .update({ where: { id: item.id }, data: { views: { increment: 1 } } })
+            .catch(() => {});
 
-        res.json({ product: { ...formatProduct(product), views: product.views + 1 } });
-
+        res.json({ product: { ...listings.formatListing(item), views: item.views + 1 } });
     } catch (error) {
-        console.error('Get product error:', error);
-        res.status(500).json({ error: 'Failed to get product' });
+        console.error('Get listing error:', error);
+        res.status(500).json({ error: 'Failed to load listing' });
     }
 });
+
+/**
+ * GET /api/products/:id/availability
+ * Booked and blocked ranges, for the calendar.
+ */
+router.get('/:id/availability', validate({ params: schemas.idParam }), async (req, res) => {
+    try {
+        const ranges = await listings.busyRanges(req.params.id);
+        res.json({ busy: ranges });
+    } catch (error) {
+        console.error('Availability error:', error);
+        res.status(500).json({ error: 'Failed to load availability' });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
 
 /**
  * POST /api/products
- * Create new product (authenticated)
+ * Creates a listing, geocoding its address in the process.
  */
-router.post('/', upload.array('images', 5), async (req, res) => {
-    try {
-        if (!req.session.userId) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
+router.post(
+    '/',
+    requireAuth,
+    requireVerifiedEmail,
+    limiters.write,
+    storage.uploader.array('images', 10),
+    validate({ body: schemas.create }),
+    async (req, res) => {
+        try {
+            const body = req.body;
+            const address = pickAddress(body);
+            const coordinates = await resolveCoordinates(address);
+            const imagePaths = await storage.persistFiles(req.files);
 
-        const { title, description, category, price, priceUnit, city } = req.body;
+            const created = await prisma.$transaction(async tx => {
+                const item = await tx.item.create({
+                    data: {
+                        userId: req.session.userId,
+                        listingType: body.listingType,
+                        title: body.title,
+                        description: body.description,
+                        category: body.category,
+                        pricePerDay: body.price,
+                        priceUnit: body.priceUnit,
+                        address: body.address ?? null,
+                        country: body.country || 'Ukraine',
+                        region: body.region ?? null,
+                        district: body.district ?? null,
+                        city: body.city ?? null,
+                        village: body.village ?? null,
+                        street: body.street ?? null,
+                        houseNumber: body.houseNumber ?? null,
+                        postcode: body.postcode ?? null,
+                        ...coordinates,
+                        ...pickHousing(body, body.listingType),
+                        isAvailable: true,
+                        views: 0
+                    }
+                });
 
-        // Validation
-        if (!title || !description || !category || !price) {
-            return res.status(400).json({ error: 'Title, description, category, and price are required' });
-        }
-
-        // Create product with images in a transaction
-        const newProduct = await prisma.$transaction(async (tx) => {
-            // Create product
-            const product = await tx.item.create({
-                data: {
-                    userId: req.session.userId,
-                    title,
-                    description,
-                    pricePerDay: parseFloat(price),
-                    priceUnit: priceUnit || 'day',
-                    category,
-                    city: city || null,
-                    ...housingData(req.body),
-                    isAvailable: true,
-                    views: 0
-                }
-            });
-
-            // Create image records
-            if (req.files && req.files.length > 0) {
-                for (let i = 0; i < req.files.length; i++) {
-                    await tx.itemImage.create({
-                        data: {
-                            itemId: product.id,
-                            imagePath: '/uploads/' + req.files[i].filename,
-                            sortOrder: i
-                        }
+                if (imagePaths.length) {
+                    await tx.itemImage.createMany({
+                        data: imagePaths.map((path, index) => ({
+                            itemId: item.id,
+                            imagePath: path,
+                            sortOrder: index
+                        }))
                     });
                 }
-            }
 
-            return product;
-        });
+                return item;
+            });
 
-        // Fetch complete product with images
-        const productWithImages = await prisma.item.findUnique({
-            where: { id: newProduct.id },
-            include: { images: { orderBy: { sortOrder: 'asc' } } }
-        });
+            const complete = await prisma.item.findUnique({
+                where: { id: created.id },
+                include: listings.LISTING_INCLUDE
+            });
 
-        res.status(201).json({ message: 'Product created successfully', product: formatProduct(productWithImages) });
-
-    } catch (error) {
-        console.error('Create product error:', error);
-        res.status(500).json({ error: 'Failed to create product' });
+            res.status(201).json({
+                message: 'Listing created',
+                geocoded: coordinates.latitude !== null,
+                product: listings.formatListing(complete)
+            });
+        } catch (error) {
+            console.error('Create listing error:', error);
+            res.status(500).json({ error: 'Failed to create listing' });
+        }
     }
-});
+);
 
 /**
  * PUT /api/products/:id
- * Update product (owner only)
+ * Owner-only update. Coordinates are refreshed only when the address moved.
  */
-router.put('/:id', upload.array('images', 5), async (req, res) => {
-    try {
-        if (!req.session.userId) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
+router.put(
+    '/:id',
+    requireAuth,
+    requireVerifiedEmail,
+    storage.uploader.array('images', 10),
+    validate({ params: schemas.idParam, body: schemas.update }),
+    async (req, res) => {
+        try {
+            const { item, error } = await loadOwnedListing(req.params.id, req.session.userId);
+            if (error) return res.status(error.status).json({ error: error.message });
 
-        // Parse ID
-        const idParam = req.params.id;
-        const numericId = idParam.startsWith('prod-')
-            ? parseInt(idParam.replace('prod-', ''))
-            : parseInt(idParam);
+            const body = req.body;
+            const addressPatch = pickAddress(body);
 
-        if (isNaN(numericId)) {
-            return res.status(400).json({ error: 'Invalid product ID' });
-        }
+            // Re-geocoding is an outbound network call; only pay for it when an
+            // address component actually changed.
+            const addressChanged = Object.entries(addressPatch).some(
+                ([key, value]) => (value ?? null) !== (item[key] ?? null)
+            );
 
-        // Check ownership
-        const existingProduct = await prisma.item.findUnique({
-            where: { id: numericId }
-        });
+            const coordinates = addressChanged
+                ? await resolveCoordinates({ ...pickAddress(item), ...addressPatch })
+                : {};
 
-        if (!existingProduct) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
+            const newImagePaths = await storage.persistFiles(req.files);
+            const removeList = body.removeImages ?? [];
 
-        if (existingProduct.userId !== req.session.userId) {
-            return res.status(403).json({ error: 'You can only edit your own products' });
-        }
+            const updated = await prisma.$transaction(async tx => {
+                const record = await tx.item.update({
+                    where: { id: item.id },
+                    data: {
+                        ...(body.title !== undefined && { title: body.title }),
+                        ...(body.description !== undefined && { description: body.description }),
+                        ...(body.category !== undefined && { category: body.category }),
+                        ...(body.price !== undefined && { pricePerDay: body.price }),
+                        ...(body.priceUnit !== undefined && { priceUnit: body.priceUnit }),
+                        ...(body.available !== undefined && { isAvailable: body.available }),
+                        ...(body.address !== undefined && { address: body.address ?? null }),
+                        ...addressPatch,
+                        ...coordinates,
+                        ...pickHousing(body, item.listingType)
+                    }
+                });
 
-        const { title, description, category, price, priceUnit, city, available } = req.body;
-
-        // Update product with images in a transaction
-        const updatedProduct = await prisma.$transaction(async (tx) => {
-            // Update product fields
-            const product = await tx.item.update({
-                where: { id: numericId },
-                data: {
-                    ...(title && { title }),
-                    ...(description && { description }),
-                    ...(category && { category }),
-                    ...(price && { pricePerDay: parseFloat(price) }),
-                    ...(priceUnit && { priceUnit }),
-                    ...(city !== undefined && { city: city || null }),
-                    ...(req.body.address !== undefined && housingData(req.body)),
-                    ...(available !== undefined && { isAvailable: available === 'true' || available === true })
+                if (removeList.length) {
+                    await tx.itemImage.deleteMany({
+                        where: { itemId: item.id, imagePath: { in: removeList } }
+                    });
                 }
+
+                if (newImagePaths.length) {
+                    const last = await tx.itemImage.findFirst({
+                        where: { itemId: item.id },
+                        orderBy: { sortOrder: 'desc' },
+                        select: { sortOrder: true }
+                    });
+                    const startOrder = last ? last.sortOrder + 1 : 0;
+
+                    await tx.itemImage.createMany({
+                        data: newImagePaths.map((path, index) => ({
+                            itemId: item.id,
+                            imagePath: path,
+                            sortOrder: startOrder + index
+                        }))
+                    });
+                }
+
+                return record;
             });
 
-            // Add new images if uploaded
-            if (req.files && req.files.length > 0) {
-                // Get current max sort order
-                const lastImage = await tx.itemImage.findFirst({
-                    where: { itemId: numericId },
-                    orderBy: { sortOrder: 'desc' }
-                });
-                const startOrder = lastImage ? lastImage.sortOrder + 1 : 0;
-
-                for (let i = 0; i < req.files.length; i++) {
-                    await tx.itemImage.create({
-                        data: {
-                            itemId: product.id,
-                            imagePath: '/uploads/' + req.files[i].filename,
-                            sortOrder: startOrder + i
-                        }
-                    });
+            // Blob/disk cleanup happens after the transaction commits, so a
+            // rollback can never leave the database pointing at deleted files.
+            for (const path of removeList) {
+                if (item.images.some(image => image.imagePath === path)) {
+                    await storage.deleteFile(path);
                 }
             }
 
-            return product;
-        });
+            const complete = await prisma.item.findUnique({
+                where: { id: updated.id },
+                include: listings.LISTING_INCLUDE
+            });
 
-        // Fetch complete product with images
-        const productWithImages = await prisma.item.findUnique({
-            where: { id: updatedProduct.id },
-            include: { images: { orderBy: { sortOrder: 'asc' } } }
-        });
-
-        res.json({ message: 'Product updated successfully', product: formatProduct(productWithImages) });
-
-    } catch (error) {
-        console.error('Update product error:', error);
-        res.status(500).json({ error: 'Failed to update product' });
+            res.json({ message: 'Listing updated', product: listings.formatListing(complete) });
+        } catch (error) {
+            console.error('Update listing error:', error);
+            res.status(500).json({ error: 'Failed to update listing' });
+        }
     }
-});
+);
 
 /**
  * DELETE /api/products/:id
- * Delete product (owner only)
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, validate({ params: schemas.idParam }), async (req, res) => {
     try {
-        if (!req.session.userId) {
-            return res.status(401).json({ error: 'Authentication required' });
+        const { item, error } = await loadOwnedListing(req.params.id, req.session.userId);
+        if (error) return res.status(error.status).json({ error: error.message });
+
+        await prisma.item.delete({ where: { id: item.id } });
+
+        for (const image of item.images) {
+            await storage.deleteFile(image.imagePath);
         }
 
-        // Parse ID
-        const idParam = req.params.id;
-        const numericId = idParam.startsWith('prod-')
-            ? parseInt(idParam.replace('prod-', ''))
-            : parseInt(idParam);
-
-        if (isNaN(numericId)) {
-            return res.status(400).json({ error: 'Invalid product ID' });
-        }
-
-        // Fetch product with images
-        const product = await prisma.item.findUnique({
-            where: { id: numericId },
-            include: { images: true }
-        });
-
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        if (product.userId !== req.session.userId) {
-            return res.status(403).json({ error: 'You can only delete your own products' });
-        }
-
-        // Delete associated image files from filesystem
-        for (const img of product.images) {
-            const fullPath = path.join(__dirname, '../..', img.imagePath);
-            if (fs.existsSync(fullPath)) {
-                fs.unlinkSync(fullPath);
-            }
-        }
-
-        // Delete product (cascade will delete images, favorites, rentals)
-        await prisma.item.delete({
-            where: { id: numericId }
-        });
-
-        res.json({ message: 'Product deleted successfully' });
-
+        res.json({ message: 'Listing deleted' });
     } catch (error) {
-        console.error('Delete product error:', error);
-        res.status(500).json({ error: 'Failed to delete product' });
+        console.error('Delete listing error:', error);
+        res.status(500).json({ error: 'Failed to delete listing' });
     }
 });
+
+// ---------------------------------------------------------------------------
+// Availability calendar (owner-managed blocked ranges)
+// ---------------------------------------------------------------------------
+
+router.post(
+    '/:id/availability',
+    requireAuth,
+    validate({ params: schemas.idParam, body: schemas.availabilityBlock }),
+    async (req, res) => {
+        try {
+            const { item, error } = await loadOwnedListing(req.params.id, req.session.userId);
+            if (error) return res.status(error.status).json({ error: error.message });
+
+            const block = await prisma.itemAvailability.create({
+                data: {
+                    itemId: item.id,
+                    startDate: req.body.startDate,
+                    endDate: req.body.endDate,
+                    reason: req.body.reason ?? null
+                }
+            });
+
+            res.status(201).json({
+                message: 'Dates blocked',
+                block: {
+                    id: block.id,
+                    start: block.startDate.toISOString().slice(0, 10),
+                    end: block.endDate.toISOString().slice(0, 10),
+                    reason: block.reason
+                }
+            });
+        } catch (error) {
+            console.error('Block dates error:', error);
+            res.status(500).json({ error: 'Failed to block dates' });
+        }
+    }
+);
+
+router.delete('/:id/availability/:blockId', requireAuth, validate({ params: schemas.idParam.passthrough() }), async (req, res) => {
+    try {
+        const { item, error } = await loadOwnedListing(req.params.id, req.session.userId);
+        if (error) return res.status(error.status).json({ error: error.message });
+
+        const blockId = Number.parseInt(req.params.blockId, 10);
+        if (!Number.isInteger(blockId)) {
+            return res.status(400).json({ error: 'Invalid block id' });
+        }
+
+        // Scoped by itemId so a valid block id cannot be used to delete a
+        // range belonging to someone else's listing.
+        const result = await prisma.itemAvailability.deleteMany({
+            where: { id: blockId, itemId: item.id }
+        });
+
+        if (result.count === 0) return res.status(404).json({ error: 'Block not found' });
+        res.json({ message: 'Dates unblocked' });
+    } catch (error) {
+        console.error('Unblock dates error:', error);
+        res.status(500).json({ error: 'Failed to unblock dates' });
+    }
+});
+
+// Translates multer failures into readable 400s instead of generic 500s.
+router.use(storage.handleUploadError);
 
 module.exports = router;

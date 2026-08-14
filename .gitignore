@@ -1,1 +1,32 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Environment — never commit real credentials.
+# NOTE: .env is currently tracked in git history. Adding it here stops future
+# commits but does NOT remove what is already published. See README.
+.env
+.env.*
+!.env.example
+
+# User uploads (served from blob storage in production)
+uploads/*
+!uploads/.gitkeep
+
+# Build & runtime output
+.vercel/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

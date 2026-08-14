@@ -10,72 +10,91 @@ const API_BASE = '';
 let currentUser = null;
 
 /**
+ * Reads the CSRF token the server set as a cookie.
+ * The server rejects any state-changing request that does not echo it back
+ * in a header — which a cross-origin page cannot do.
+ */
+function getCsrfToken() {
+    const match = document.cookie.match(/(?:^|;\s*)arthings_csrf=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Error carrying the server's structured response, so callers can react to
+ * `code` (e.g. EMAIL_NOT_VERIFIED) and render per-field messages.
+ */
+class ApiError extends Error {
+    constructor(message, { status, code, fields } = {}) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.code = code;
+        this.fields = fields || null;
+    }
+}
+
+/**
  * API Helper Functions
  */
 const api = {
-    async get(endpoint) {
-        const res = await fetch(`${API_BASE}${endpoint}`, {
-            credentials: 'include'
-        });
-        if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.error || 'Request failed');
+    async request(endpoint, { method = 'GET', data, isFormData = false } = {}) {
+        const options = { method, credentials: 'include', headers: {} };
+
+        if (!['GET', 'HEAD'].includes(method)) {
+            const token = getCsrfToken();
+            if (token) options.headers['X-CSRF-Token'] = token;
         }
-        return res.json();
-    },
 
-    async post(endpoint, data, isFormData = false) {
-        const options = {
-            method: 'POST',
-            credentials: 'include'
-        };
-
-        if (isFormData) {
-            options.body = data;
-        } else {
-            options.headers = { 'Content-Type': 'application/json' };
-            options.body = JSON.stringify(data);
+        if (data !== undefined) {
+            if (isFormData) {
+                // Let the browser set the multipart boundary itself.
+                options.body = data;
+            } else {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(data);
+            }
         }
 
         const res = await fetch(`${API_BASE}${endpoint}`, options);
+
+        // 204 and other empty bodies would throw on .json().
+        const text = await res.text();
+        const payload = text ? JSON.parse(text) : {};
+
         if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.error || 'Request failed');
+            // An unverified account should land on the verification screen
+            // rather than a dead-end error message.
+            if (payload.code === 'EMAIL_NOT_VERIFIED' && payload.email) {
+                const target = `/pages/verify-email.html?email=${encodeURIComponent(payload.email)}`;
+                if (!window.location.pathname.endsWith('verify-email.html')) {
+                    window.location.href = target;
+                }
+            }
+
+            throw new ApiError(payload.error || 'Request failed', {
+                status: res.status,
+                code: payload.code,
+                fields: payload.fields
+            });
         }
-        return res.json();
+
+        return payload;
     },
 
-    async put(endpoint, data, isFormData = false) {
-        const options = {
-            method: 'PUT',
-            credentials: 'include'
-        };
-
-        if (isFormData) {
-            options.body = data;
-        } else {
-            options.headers = { 'Content-Type': 'application/json' };
-            options.body = JSON.stringify(data);
-        }
-
-        const res = await fetch(`${API_BASE}${endpoint}`, options);
-        if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.error || 'Request failed');
-        }
-        return res.json();
+    get(endpoint) {
+        return api.request(endpoint);
     },
 
-    async delete(endpoint) {
-        const res = await fetch(`${API_BASE}${endpoint}`, {
-            method: 'DELETE',
-            credentials: 'include'
-        });
-        if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.error || 'Request failed');
-        }
-        return res.json();
+    post(endpoint, data, isFormData = false) {
+        return api.request(endpoint, { method: 'POST', data, isFormData });
+    },
+
+    put(endpoint, data, isFormData = false) {
+        return api.request(endpoint, { method: 'PUT', data, isFormData });
+    },
+
+    delete(endpoint, data) {
+        return api.request(endpoint, { method: 'DELETE', data });
     }
 };
 
@@ -525,6 +544,8 @@ window.api = api;
 window.currentUser = currentUser;
 window.checkAuth = checkAuth;
 window.showToast = showToast;
+window.ApiError = ApiError;
+window.getCsrfToken = getCsrfToken;
 window.createProductCard = createProductCard;
 window.toggleFavorite = toggleFavorite;
 window.getCategoryName = getCategoryName;

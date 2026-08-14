@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Оренда житла в Україні — квартири, будинки, кімнати, житло для студентів">
+    <title>Оренда житла - Arthings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="icon" type="image/png" href="/assets/images/logo.png">
+    <style>
+        .housing-hero {
+            background: linear-gradient(135deg, #f0fdfc 0%, #f5f3ff 100%);
+            padding: 2.5rem 0 2rem;
+        }
+
+        .housing-hero h1 {
+            font-size: clamp(1.6rem, 4vw, 2.25rem);
+            margin: 0 0 0.4rem;
+            color: #111827;
+        }
+
+        .housing-hero p {
+            color: #4b5563;
+            margin: 0 0 1.4rem;
+        }
+
+        .housing-search {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            position: relative;
+        }
+
+        .housing-search input {
+            flex: 1;
+            min-width: 220px;
+            padding: 0.8rem 1rem;
+            font-size: 0.95rem;
+            font-family: inherit;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            outline: none;
+        }
+
+        .housing-search input:focus {
+            border-color: #00d1cd;
+            box-shadow: 0 0 0 3px rgba(0, 209, 205, .15);
+        }
+
+        .category-scroller {
+            display: flex;
+            gap: 0.55rem;
+            overflow-x: auto;
+            padding: 1.1rem 0 0.4rem;
+            scrollbar-width: thin;
+        }
+
+        .category-tile {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+            min-width: 92px;
+            padding: 0.75rem 0.6rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fff;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #374151;
+            text-align: center;
+            line-height: 1.25;
+            transition: all .15s;
+        }
+
+        .category-tile:hover { border-color: #00d1cd; transform: translateY(-1px); }
+        .category-tile.is-active { border-color: #00d1cd; background: #f0fdfc; color: #00817f; }
+        .category-tile-icon { font-size: 1.4rem; }
+
+        .housing-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 1.75rem;
+            padding: 1.75rem 0 3rem;
+            align-items: start;
+        }
+
+        .housing-filters {
+            position: sticky;
+            top: 88px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 1.15rem;
+        }
+
+        .filter-block { margin-bottom: 1.1rem; }
+        .filter-block:last-child { margin-bottom: 0; }
+
+        .filter-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: #6b7280;
+            margin-bottom: 0.45rem;
+        }
+
+        .filter-duo { display: flex; gap: 0.45rem; }
+
+        .filter-input,
+        .filter-select {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            font-size: 0.85rem;
+            font-family: inherit;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .filter-input:focus, .filter-select:focus { border-color: #00d1cd; }
+
+        .filter-check {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.85rem;
+            color: #374151;
+            padding: 0.2rem 0;
+            cursor: pointer;
+        }
+
+        .housing-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.1rem;
+            flex-wrap: wrap;
+        }
+
+        .housing-count { font-size: 0.9rem; color: #6b7280; font-weight: 500; }
+
+        .housing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1.15rem;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.4rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            min-width: 38px;
+            padding: 0.45rem 0.7rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .page-btn.is-active { background: #00d1cd; border-color: #00d1cd; color: #03201f; font-weight: 700; }
+        .page-btn:disabled { opacity: .45; cursor: default; }
+
+        @media (max-width: 860px) {
+            .housing-layout { grid-template-columns: 1fr; }
+            .housing-filters { position: static; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="/" class="navbar-brand">
+                <img src="/assets/images/logo.png" alt="Arthings" class="navbar-logo">
+                <span class="navbar-title">Arthings</span>
+            </a>
+
+            <div class="navbar-nav">
+                <a href="/" class="nav-link">Оренда речей</a>
+                <a href="/pages/housing.html" class="nav-link active">Оренда житла</a>
+                <a href="/pages/map.html?type=housing" class="nav-link">Карта</a>
+                <a href="/pages/about.html" class="nav-link">Про нас</a>
+            </div>
+
+            <div class="navbar-actions">
+                <div class="lang-switcher">
+                    <button class="lang-btn active" data-lang="en">EN</button>
+                    <button class="lang-btn" data-lang="uk">UK</button>
+                </div>
+
+                <div id="auth-links">
+                    <a href="/pages/login.html" class="btn btn-ghost">Увійти</a>
+                    <a href="/pages/register.html" class="btn btn-primary">Реєстрація</a>
+                </div>
+
+                <div id="user-links" class="hidden">
+                    <a href="/pages/add-item.html?type=housing" class="btn btn-primary">Здати житло</a>
+                    <div class="user-dropdown">
+                        <button class="btn btn-ghost user-menu-btn">
+                            <span id="user-name">User</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="dropdown-menu">
+                            <a href="/pages/profile.html">Профіль</a>
+                            <a href="/pages/my-listings.html">Мої оголошення</a>
+                            <a href="/pages/rental-requests.html">Запити</a>
+                            <a href="/pages/favorites.html">Обране</a>
+                            <hr>
+                            <a href="#" class="logout-btn">Вийти</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="mobile-menu-btn" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="mobile-nav">
+        <a href="/" class="mobile-nav-link">Оренда речей</a>
+        <a href="/pages/housing.html" class="mobile-nav-link">Оренда житла</a>
+        <a href="/pages/map.html?type=housing" class="mobile-nav-link">Карта</a>
+        <hr>
+        <div id="mobile-auth-links">
+            <a href="/pages/login.html" class="mobile-nav-link">Увійти</a>
+            <a href="/pages/register.html" class="mobile-nav-link">Реєстрація</a>
+        </div>
+        <div id="mobile-user-links" class="hidden">
+            <a href="/pages/profile.html" class="mobile-nav-link">Профіль</a>
+            <a href="/pages/my-listings.html" class="mobile-nav-link">Мої оголошення</a>
+            <a href="#" class="mobile-nav-link logout-btn">Вийти</a>
+        </div>
+    </div>
+
+    <!-- Hero + categories -->
+    <section class="housing-hero">
+        <div class="container">
+            <h1>Оренда житла</h1>
+            <p>Квартири, будинки, кімнати та житло для студентів по всій Україні</p>
+
+            <div class="housing-search">
+                <input type="text" id="location-search" autocomplete="off"
+                    placeholder="Місто, село або вулиця…" aria-label="Пошук за адресою">
+                <div id="location-suggestions" class="map-suggestions" hidden
+                     style="position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:50;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.12);max-height:300px;overflow-y:auto;"></div>
+                <a href="/pages/map.html?type=housing" class="btn btn-ghost">🗺️ На карті</a>
+            </div>
+
+            <div class="category-scroller" id="category-scroller"></div>
+        </div>
+    </section>
+
+    <!-- Results -->
+    <div class="container">
+        <div class="housing-layout">
+            <aside class="housing-filters">
+                <div class="filter-block">
+                    <div class="filter-title">Ціна, ₴</div>
+                    <div class="filter-duo">
+                        <input type="number" id="f-min-price" class="filter-input" placeholder="від" min="0">
+                        <input type="number" id="f-max-price" class="filter-input" placeholder="до" min="0">
+                    </div>
+                </div>
+
+                <div class="filter-block">
+                    <div class="filter-title">Кімнат</div>
+                    <div class="filter-duo">
+                        <input type="number" id="f-min-rooms" class="filter-input" placeholder="від" min="0">
+                        <input type="number" id="f-max-rooms" class="filter-input" placeholder="до" min="0">
+                    </div>
+                </div>
+
+                <div class="filter-block">
+                    <div class="filter-title">Площа, м²</div>
+                    <div class="filter-duo">
+                        <input type="number" id="f-min-area" class="filter-input" placeholder="від" min="0">
+                        <input type="number" id="f-max-area" class="filter-input" placeholder="до" min="0">
+                    </div>
+                </div>
+
+                <div class="filter-block">
+                    <div class="filter-title">Термін оренди</div>
+                    <select id="f-period" class="filter-select">
+                        <option value="">Будь-який</option>
+                        <option value="daily">Подобово</option>
+                        <option value="weekly">Потижнево</option>
+                        <option value="monthly">Помісячно</option>
+                        <option value="short_term">Короткостроково</option>
+                        <option value="long_term">Довгостроково</option>
+                    </select>
+                </div>
+
+                <div class="filter-block">
+                    <div class="filter-title">Зручності</div>
+                    <label class="filter-check"><input type="checkbox" id="f-pets"> Можна з тваринами</label>
+                    <label class="filter-check"><input type="checkbox" id="f-students"> Підходить студентам</label>
+                    <label class="filter-check"><input type="checkbox" id="f-parking"> Паркінг</label>
+                    <label class="filter-check"><input type="checkbox" id="f-internet"> Інтернет</label>
+                    <label class="filter-check"><input type="checkbox" id="f-furnished"> З меблями</label>
+                    <label class="filter-check"><input type="checkbox" id="f-utilities"> Комуналка включена</label>
+                </div>
+
+                <div class="filter-block">
+                    <div class="filter-title">Вільно у період</div>
+                    <div class="filter-duo">
+                        <input type="date" id="f-from" class="filter-input" aria-label="Від">
+                        <input type="date" id="f-to" class="filter-input" aria-label="До">
+                    </div>
+                </div>
+
+                <button type="button" id="reset-filters" class="btn btn-ghost" style="width:100%;margin-top:0.4rem;">
+                    Скинути фільтри
+                </button>
+            </aside>
+
+            <main>
+                <div class="housing-toolbar">
+                    <span class="housing-count" id="results-count">Завантаження…</span>
+                    <select id="sort" class="filter-select" style="width:auto;">
+                        <option value="newest">Найновіші</option>
+                        <option value="price-asc">Спочатку дешевші</option>
+                        <option value="price-desc">Спочатку дорожчі</option>
+                        <option value="rating">За рейтингом</option>
+                        <option value="popular">Найпопулярніші</option>
+                    </select>
+                </div>
+
+                <div class="housing-grid" id="housing-grid"></div>
+                <div class="pagination" id="pagination"></div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/assets/js/i18n.js"></script>
+    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/arthings-map.js"></script>
+    <script>
+        (function () {
+            'use strict';
+
+            const state = { preset: '', page: 1, location: null };
+
+            const grid = document.getElementById('housing-grid');
+            const countEl = document.getElementById('results-count');
+            const paginationEl = document.getElementById('pagination');
+
+            /** Reads the filter panel into query parameters. */
+            function collectFilters() {
+                const value = id => {
+                    const el = document.getElementById(id);
+                    return el && el.value !== '' ? el.value : undefined;
+                };
+                const checked = id => (document.getElementById(id).checked ? 'true' : undefined);
+
+                const filters = {
+                    housingPreset: state.preset || undefined,
+                    minPrice: value('f-min-price'),
+                    maxPrice: value('f-max-price'),
+                    minRooms: value('f-min-rooms'),
+                    maxRooms: value('f-max-rooms'),
+                    minArea: value('f-min-area'),
+                    maxArea: value('f-max-area'),
+                    rentalPeriod: value('f-period'),
+                    petsAllowed: checked('f-pets'),
+                    studentsAllowed: checked('f-students'),
+                    hasParking: checked('f-parking'),
+                    hasInternet: checked('f-internet'),
+                    furnished: checked('f-furnished'),
+                    utilitiesIncluded: checked('f-utilities'),
+                    sort: value('sort') || 'newest',
+                    page: state.page,
+                    limit: 24
+                };
+
+                // Both ends are required for the availability window to apply.
+                const from = value('f-from');
+                const to = value('f-to');
+                if (from && to) {
+                    filters.availableFrom = from;
+                    filters.availableTo = to;
+                }
+
+                // A picked suggestion narrows by settlement rather than by
+                // free-text search, which is far more precise.
+                if (state.location) {
+                    const address = state.location.address || {};
+                    if (address.street) filters.street = address.street;
+                    if (address.village) filters.village = address.village;
+                    else if (address.city) filters.city = address.city;
+                }
+
+                return filters;
+            }
+
+            async function loadCategories() {
+                try {
+                    const { categories } = await api.get('/api/housing/categories');
+                    const scroller = document.getElementById('category-scroller');
+                    const isUk = window.i18n ? i18n.getLanguage() === 'uk' : true;
+
+                    scroller.innerHTML = [
+                        `<button type="button" class="category-tile is-active" data-preset="">
+                            <span class="category-tile-icon">🏘️</span><span>Усе житло</span>
+                         </button>`,
+                        ...categories.map(category => `
+                            <button type="button" class="category-tile" data-preset="${escapeHtml(category.id)}">
+                                <span class="category-tile-icon">${category.icon}</span>
+                                <span>${escapeHtml(isUk ? category.nameUk : category.nameEn)}</span>
+                            </button>`)
+                    ].join('');
+                } catch (error) {
+                    console.error('Failed to load housing categories:', error);
+                }
+            }
+
+            function renderPagination(page, pages) {
+                if (pages <= 1) {
+                    paginationEl.innerHTML = '';
+                    return;
+                }
+
+                // Windowed page list so 200 pages do not render 200 buttons.
+                const numbers = [];
+                const from = Math.max(1, page - 2);
+                const to = Math.min(pages, from + 4);
+                for (let index = from; index <= to; index += 1) numbers.push(index);
+
+                paginationEl.innerHTML = `
+                    <button class="page-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>‹</button>
+                    ${numbers.map(number => `
+                        <button class="page-btn ${number === page ? 'is-active' : ''}" data-page="${number}">
+                            ${number}
+                        </button>`).join('')}
+                    <button class="page-btn" data-page="${page + 1}" ${page === pages ? 'disabled' : ''}>›</button>`;
+            }
+
+            async function load() {
+                grid.innerHTML = '';
+                countEl.textContent = 'Завантаження…';
+
+                const params = new URLSearchParams();
+                for (const [key, value] of Object.entries(collectFilters())) {
+                    if (value !== undefined && value !== '') params.set(key, value);
+                }
+
+                try {
+                    const result = await api.get(`/api/housing?${params}`);
+
+                    countEl.textContent = result.total
+                        ? `Знайдено ${result.total} оголошень`
+                        : 'Нічого не знайдено';
+
+                    if (!result.products.length) {
+                        grid.innerHTML =
+                            '<p style="color:#9ca3af;grid-column:1/-1;padding:2rem 0;">' +
+                            'За вашим запитом нічого не знайдено. Спробуйте змінити фільтри.</p>';
+                        paginationEl.innerHTML = '';
+                        return;
+                    }
+
+                    // Reuses the shared card component so housing and items
+                    // render identically across the site.
+                    for (const product of result.products) {
+                        grid.appendChild(createProductCard(product));
+                    }
+
+                    renderPagination(result.page, result.pages);
+                } catch (error) {
+                    countEl.textContent = 'Помилка завантаження';
+                    grid.innerHTML = `<p style="color:#ef4444;grid-column:1/-1;">${escapeHtml(error.message)}</p>`;
+                }
+            }
+
+            function bind() {
+                const reload = debounce(() => { state.page = 1; load(); }, 350);
+
+                document.querySelectorAll('.filter-input, .filter-select').forEach(el => {
+                    el.addEventListener('change', reload);
+                });
+
+                document.getElementById('category-scroller').addEventListener('click', event => {
+                    const tile = event.target.closest('[data-preset]');
+                    if (!tile) return;
+
+                    document.querySelectorAll('.category-tile')
+                        .forEach(el => el.classList.remove('is-active'));
+                    tile.classList.add('is-active');
+
+                    state.preset = tile.dataset.preset;
+                    state.page = 1;
+                    load();
+                });
+
+                paginationEl.addEventListener('click', event => {
+                    const button = event.target.closest('[data-page]');
+                    if (!button || button.disabled) return;
+                    state.page = Number(button.dataset.page);
+                    load();
+                    window.scrollTo({ top: 260, behavior: 'smooth' });
+                });
+
+                document.getElementById('reset-filters').addEventListener('click', () => {
+                    document.querySelectorAll('.housing-filters input').forEach(input => {
+                        if (input.type === 'checkbox') input.checked = false;
+                        else input.value = '';
+                    });
+                    document.getElementById('f-period').value = '';
+                    document.getElementById('location-search').value = '';
+                    state.location = null;
+                    state.page = 1;
+                    load();
+                });
+
+                attachMapAutocomplete({
+                    input: document.getElementById('location-search'),
+                    resultsContainer: document.getElementById('location-suggestions'),
+                    onSelect: suggestion => {
+                        state.location = suggestion;
+                        state.page = 1;
+                        load();
+                    }
+                });
+
+                // Clearing the box should drop the location constraint.
+                document.getElementById('location-search').addEventListener('input', event => {
+                    if (event.target.value.trim() === '' && state.location) {
+                        state.location = null;
+                        reload();
+                    }
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', async () => {
+                if (typeof checkAuth === 'function') checkAuth();
+                await loadCategories();
+                bind();
+                await load();
+            });
+        })();
+    </script>
+</body>
+
+</html>

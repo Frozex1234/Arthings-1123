@@ -2,6 +2,7 @@
 const express = require('express');
 const prisma = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
+const notifications = require('../services/notifications');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -106,6 +107,19 @@ router.post('/', async (req, res) => {
             if (item.userId !== senderId && item.userId !== recipientId) return res.status(403).json({ error: 'This listing is not associated with the conversation' });
         }
         const message = await prisma.message.create({ data: { senderId, recipientId, itemId, body } });
+
+        // Best-effort: a failed notification must not fail the send.
+        prisma.user
+            .findUnique({ where: { id: senderId }, select: { name: true } })
+            .then(sender => notifications.notify({
+                userId: recipientId,
+                type: 'message_received',
+                title: `Нове повідомлення від ${sender?.name || 'користувача'}`,
+                body: body.slice(0, 140),
+                link: `/pages/messages.html?user=user-${senderId}${itemId ? `&itemId=prod-${itemId}` : ''}`
+            }))
+            .catch(() => {});
+
         res.status(201).json({ message: formatMessage(message) });
     } catch (error) {
         console.error('Send message error:', error);

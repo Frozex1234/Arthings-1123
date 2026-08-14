@@ -1,228 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uk">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Find items near you on Arthings">
-    <title>Map - Arthings</title>
+    <meta name="description" content="Знайдіть речі та житло поруч з вами на карті Arthings">
+    <title>Карта - Arthings</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/pages/map.css">
     <link rel="icon" type="image/png" href="/assets/images/logo.png">
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <style>
-        #map {
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
 
-        .leaflet-popup-content-wrapper {
-            border-radius: 12px;
-            padding: 0;
-            overflow: hidden;
-        }
-
-        .leaflet-popup-content {
-            margin: 0;
-            min-width: 220px;
-        }
-
-        .map-popup {
-            font-family: 'Inter', sans-serif;
-        }
-
-        .map-popup-image {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-        }
-
-        .map-popup-content {
-            padding: 12px;
-        }
-
-        .map-popup-title {
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 4px;
-            color: #111827;
-        }
-
-        .map-popup-price {
-            font-weight: 700;
-            font-size: 16px;
-            color: #00d1cd;
-        }
-
-        .map-popup-price span {
-            font-weight: 400;
-            font-size: 12px;
-            color: #6b7280;
-        }
-
-        .map-popup-link {
-            display: block;
-            text-align: center;
-            padding: 8px;
-            background: linear-gradient(135deg, #00d1cd 0%, #00a8a5 100%);
-            color: white;
-            font-size: 13px;
-            font-weight: 600;
-            text-decoration: none;
-            margin-top: 8px;
-            border-radius: 8px;
-        }
-
-        .map-popup-link:hover {
-            opacity: 0.9;
-        }
-
-        .city-marker {
-            background: linear-gradient(135deg, #00d1cd 0%, #00a8a5 100%);
-            color: white;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0, 209, 205, 0.4);
-            border: 3px solid white;
-        }
-
-        .map-sidebar {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            width: 360px;
-            max-height: calc(100% - 32px);
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            overflow: hidden;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .map-sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid #e5e7eb;
-            flex-shrink: 0;
-        }
-
-        .map-sidebar-header h3 {
-            font-size: 1.125rem;
-            margin-bottom: 12px;
-        }
-
-        .map-filters {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .map-results {
-            flex: 1;
-            overflow-y: auto;
-            max-height: 400px;
-        }
-
-        .map-result-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px 20px;
-            border-bottom: 1px solid #f3f4f6;
-            cursor: pointer;
-            transition: background 0.15s;
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .map-result-item:hover {
-            background: #f9fafb;
-        }
-
-        .map-result-item.active {
-            background: rgba(0, 209, 205, 0.1);
-            border-left: 3px solid #00d1cd;
-        }
-
-        .map-result-image {
-            width: 70px;
-            height: 52px;
-            border-radius: 8px;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-
-        .map-result-image img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .map-result-info h4 {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 2px;
-            color: #111827;
-        }
-
-        .map-result-info .location {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 4px;
-        }
-
-        .map-result-info .price {
-            font-size: 0.875rem;
-            font-weight: 700;
-            color: #00d1cd;
-        }
-
-        .leaflet-control-zoom {
-            border: none !important;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-        }
-
-        .leaflet-control-zoom a {
-            border-radius: 8px !important;
-            width: 36px !important;
-            height: 36px !important;
-            line-height: 36px !important;
-        }
-
-        @media (max-width: 768px) {
-            .map-sidebar {
-                position: static;
-                width: 100%;
-                max-height: none;
-                border-radius: 0;
-                order: 2;
-            }
-
-            .map-container {
-                flex-direction: column;
-            }
-
-            #map {
-                height: 50vh;
-                order: 1;
-            }
-
-            .map-results {
-                max-height: 300px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 </head>
 
 <body>
@@ -235,10 +28,10 @@
             </a>
 
             <div class="navbar-nav">
-                <a href="/" class="nav-link" data-i18n="nav.home">Home</a>
-                <a href="/pages/map.html" class="nav-link active" data-i18n="nav.map">Map</a>
-                <a href="/pages/about.html" class="nav-link" data-i18n="nav.about">About</a>
-                <a href="/pages/contact.html" class="nav-link" data-i18n="nav.contact">Contact</a>
+                <a href="/" class="nav-link" data-i18n="nav.rentItems">Оренда речей</a>
+                <a href="/pages/housing.html" class="nav-link" data-i18n="nav.rentHousing">Оренда житла</a>
+                <a href="/pages/map.html" class="nav-link active" data-i18n="nav.map">Карта</a>
+                <a href="/pages/about.html" class="nav-link" data-i18n="nav.about">Про нас</a>
             </div>
 
             <div class="navbar-actions">
@@ -247,398 +40,434 @@
                     <button class="lang-btn" data-lang="uk">UK</button>
                 </div>
 
-                <!-- Auth Links (when logged out) -->
                 <div id="auth-links">
-                    <a href="/pages/login.html" class="btn btn-ghost" data-i18n="nav.login">Log In</a>
-                    <a href="/pages/register.html" class="btn btn-primary" data-i18n="nav.register">Sign Up</a>
+                    <a href="/pages/login.html" class="btn btn-ghost" data-i18n="nav.login">Увійти</a>
+                    <a href="/pages/register.html" class="btn btn-primary" data-i18n="nav.register">Реєстрація</a>
                 </div>
 
-                <!-- User Links (when logged in) -->
                 <div id="user-links" class="hidden">
-                    <a href="/pages/add-item.html" class="btn btn-primary" data-i18n="nav.addItem">Add Item</a>
+                    <a href="/pages/add-item.html" class="btn btn-primary" data-i18n="nav.addItem">Додати</a>
                     <div class="user-dropdown">
                         <button class="btn btn-ghost user-menu-btn">
                             <span id="user-name">User</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
                         <div class="dropdown-menu">
-                            <a href="/pages/profile.html" data-i18n="nav.profile">Profile</a>
-                            <a href="/pages/my-listings.html" data-i18n="nav.myListings">My Listings</a>
-                            <a href="/pages/favorites.html" data-i18n="nav.favorites">Favorites</a>
+                            <a href="/pages/profile.html" data-i18n="nav.profile">Профіль</a>
+                            <a href="/pages/my-listings.html" data-i18n="nav.myListings">Мої оголошення</a>
+                            <a href="/pages/rental-requests.html" data-i18n="nav.requests">Запити</a>
+                            <a href="/pages/favorites.html" data-i18n="nav.favorites">Обране</a>
                             <hr>
-                            <a href="#" class="logout-btn" data-i18n="nav.logout">Log Out</a>
+                            <a href="#" class="logout-btn" data-i18n="nav.logout">Вийти</a>
                         </div>
                     </div>
                 </div>
             </div>
 
             <button class="mobile-menu-btn" aria-label="Toggle menu">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span></span><span></span><span></span>
             </button>
         </div>
     </nav>
 
-    <!-- Mobile Navigation -->
     <div class="mobile-nav">
-        <a href="/" class="mobile-nav-link" data-i18n="nav.home">Home</a>
-        <a href="/pages/map.html" class="mobile-nav-link" data-i18n="nav.map">Map</a>
-        <a href="/pages/about.html" class="mobile-nav-link" data-i18n="nav.about">About</a>
-        <a href="/pages/contact.html" class="mobile-nav-link" data-i18n="nav.contact">Contact</a>
+        <a href="/" class="mobile-nav-link">Оренда речей</a>
+        <a href="/pages/housing.html" class="mobile-nav-link">Оренда житла</a>
+        <a href="/pages/map.html" class="mobile-nav-link">Карта</a>
+        <a href="/pages/about.html" class="mobile-nav-link">Про нас</a>
         <hr>
         <div id="mobile-auth-links">
-            <a href="/pages/login.html" class="mobile-nav-link" data-i18n="nav.login">Log In</a>
-            <a href="/pages/register.html" class="mobile-nav-link" data-i18n="nav.register">Sign Up</a>
+            <a href="/pages/login.html" class="mobile-nav-link">Увійти</a>
+            <a href="/pages/register.html" class="mobile-nav-link">Реєстрація</a>
         </div>
         <div id="mobile-user-links" class="hidden">
-            <a href="/pages/add-item.html" class="mobile-nav-link" data-i18n="nav.addItem">Add Item</a>
-            <a href="/pages/profile.html" class="mobile-nav-link" data-i18n="nav.profile">Profile</a>
-            <a href="/pages/my-listings.html" class="mobile-nav-link" data-i18n="nav.myListings">My Listings</a>
-            <a href="/pages/favorites.html" class="mobile-nav-link" data-i18n="nav.favorites">Favorites</a>
-            <a href="#" class="mobile-nav-link logout-btn" data-i18n="nav.logout">Log Out</a>
+            <a href="/pages/profile.html" class="mobile-nav-link">Профіль</a>
+            <a href="/pages/my-listings.html" class="mobile-nav-link">Мої оголошення</a>
+            <a href="#" class="mobile-nav-link logout-btn">Вийти</a>
         </div>
     </div>
 
-    <!-- Map Container -->
-    <div class="map-container">
-        <!-- Sidebar -->
-        <div class="map-sidebar">
+    <!-- Map -->
+    <main class="map-page">
+        <aside class="map-sidebar">
             <div class="map-sidebar-header">
-                <h3 data-i18n="map.title">Find Items Near You</h3>
-                <div class="map-filters">
-                    <select id="city-filter" class="form-input form-select">
-                        <option value="" data-i18n="filters.allCities">All Cities</option>
-                    </select>
-                    <select id="category-filter" class="form-input form-select">
-                        <option value="" data-i18n="filters.all">All Categories</option>
-                    </select>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="number" id="min-price" class="form-input" placeholder="Min $" min="0"
-                            data-i18n-placeholder="filters.minPrice" style="flex: 1;">
-                        <input type="number" id="max-price" class="form-input" placeholder="Max $" min="0"
-                            data-i18n-placeholder="filters.maxPrice" style="flex: 1;">
+                <div class="map-search-wrapper">
+                    <input type="text" id="map-search" class="map-search-input" autocomplete="off"
+                        placeholder="Місто, село або вулиця…" aria-label="Пошук за адресою">
+                    <div id="map-suggestions" class="map-suggestions" hidden></div>
+                </div>
+
+                <div class="map-actions">
+                    <button type="button" id="btn-near-me" class="map-action-btn">📍 Поруч зі мною</button>
+                    <button type="button" id="btn-reset" class="map-action-btn">Скинути</button>
+                </div>
+
+                <label class="map-toggle">
+                    <input type="checkbox" id="search-in-view" checked>
+                    Шукати у видимій області карти
+                </label>
+            </div>
+
+            <div class="map-filters">
+                <div class="map-filter-group">
+                    <span class="map-filter-label">Тип оголошень</span>
+                    <div class="map-chips" id="type-chips">
+                        <button type="button" class="map-chip is-active" data-type="">Усі</button>
+                        <button type="button" class="map-chip" data-type="item">Речі</button>
+                        <button type="button" class="map-chip" data-type="housing">Житло</button>
                     </div>
-                    <button id="apply-filters-btn" class="btn btn-primary" style="width: 100%;"
-                        data-i18n="filters.apply">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="margin-right: 6px;">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        Apply Filters
-                    </button>
+                </div>
+
+                <div class="map-filter-group">
+                    <label class="map-filter-label" for="filter-category">Категорія</label>
+                    <select id="filter-category" class="map-filter-select">
+                        <option value="">Усі категорії</option>
+                    </select>
+                </div>
+
+                <div class="map-filter-group">
+                    <span class="map-filter-label">Ціна, ₴</span>
+                    <div class="map-filter-row">
+                        <input type="number" id="filter-min-price" class="map-filter-input" placeholder="від" min="0">
+                        <input type="number" id="filter-max-price" class="map-filter-input" placeholder="до" min="0">
+                    </div>
+                </div>
+
+                <div class="map-filter-group">
+                    <label class="map-filter-label" for="filter-radius">Відстань</label>
+                    <select id="filter-radius" class="map-filter-select">
+                        <option value="">Будь-яка</option>
+                        <option value="1">До 1 км</option>
+                        <option value="3">До 3 км</option>
+                        <option value="5">До 5 км</option>
+                        <option value="10">До 10 км</option>
+                        <option value="25">До 25 км</option>
+                        <option value="50">До 50 км</option>
+                    </select>
+                    <small id="radius-hint" style="display:block;margin-top:5px;color:#9ca3af;font-size:11.5px;">
+                        Спочатку визначте своє місцезнаходження
+                    </small>
+                </div>
+
+                <div class="map-filter-group">
+                    <span class="map-filter-label">Вільно у період</span>
+                    <div class="map-filter-row">
+                        <input type="date" id="filter-from" class="map-filter-input" aria-label="Дата початку">
+                        <input type="date" id="filter-to" class="map-filter-input" aria-label="Дата завершення">
+                    </div>
+                </div>
+
+                <div class="map-filter-group">
+                    <label class="map-filter-label" for="filter-rating">Мінімальний рейтинг власника</label>
+                    <select id="filter-rating" class="map-filter-select">
+                        <option value="">Будь-який</option>
+                        <option value="3">3★ і вище</option>
+                        <option value="4">4★ і вище</option>
+                        <option value="4.5">4.5★ і вище</option>
+                    </select>
+                </div>
+
+                <div class="map-filter-group" id="housing-filters" hidden>
+                    <span class="map-filter-label">Параметри житла</span>
+                    <div class="map-filter-row" style="margin-bottom:8px;">
+                        <input type="number" id="filter-min-rooms" class="map-filter-input" placeholder="кімнат від" min="0">
+                        <input type="number" id="filter-max-rooms" class="map-filter-input" placeholder="до" min="0">
+                    </div>
+                    <label class="map-checkbox"><input type="checkbox" id="filter-pets"> Можна з тваринами</label>
+                    <label class="map-checkbox"><input type="checkbox" id="filter-students"> Підходить студентам</label>
+                    <label class="map-checkbox"><input type="checkbox" id="filter-parking"> Є паркінг</label>
+                    <label class="map-checkbox"><input type="checkbox" id="filter-internet"> Є інтернет</label>
+                </div>
+
+                <div class="map-filter-group">
+                    <label class="map-checkbox">
+                        <input type="checkbox" id="filter-verified"> Лише перевірені власники
+                    </label>
                 </div>
             </div>
-            <div id="results-header" data-i18n="common.loading"
-                style="padding: 12px 20px; background: #f9fafb; font-size: 0.875rem; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
-                Loading...
+
+            <div class="map-results-header">
+                <span id="results-count">Завантаження…</span>
             </div>
-            <div id="map-results" class="map-results">
-                <div style="padding: 40px; text-align: center;">
-                    <div class="loading-spinner" style="margin: 0 auto;"></div>
-                </div>
-            </div>
+
+            <div class="map-results" id="map-results"></div>
+        </aside>
+
+        <div class="map-canvas-wrapper">
+            <div id="map"></div>
+            <div class="map-loading" id="map-loading" hidden>Завантаження…</div>
         </div>
+    </main>
 
-        <!-- Leaflet Map -->
-        <div id="map"></div>
-    </div>
-
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/components/legal-modal.js"></script>
-    <script src="/components/cookie-banner.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="/assets/js/i18n.js"></script>
     <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/arthings-map.js"></script>
     <script>
-        // City coordinates for Ukraine (all 25 cities)
-        const cityCoordinates = {
-            'Kyiv': [50.4501, 30.5234],
-            'Kharkiv': [49.9935, 36.2304],
-            'Odesa': [46.4825, 30.7233],
-            'Dnipro': [48.4647, 35.0462],
-            'Donetsk': [48.0159, 37.8029],
-            'Zaporizhzhia': [47.8388, 35.1396],
-            'Lviv': [49.8397, 24.0297],
-            'Kryvyi Rih': [47.9105, 33.3918],
-            'Mykolaiv': [46.9750, 31.9946],
-            'Mariupol': [47.0978, 37.5432],
-            'Luhansk': [48.5740, 39.3078],
-            'Vinnytsia': [49.2331, 28.4682],
-            'Makiivka': [48.0556, 37.9611],
-            'Simferopol': [44.9521, 34.1024],
-            'Kherson': [46.6354, 32.6169],
-            'Poltava': [49.5883, 34.5514],
-            'Chernihiv': [51.4982, 31.2893],
-            'Cherkasy': [49.4444, 32.0598],
-            'Zhytomyr': [50.2547, 28.6587],
-            'Sumy': [50.9077, 34.7981],
-            'Rivne': [50.6199, 26.2516],
-            'Ivano-Frankivsk': [48.9226, 24.7111],
-            'Ternopil': [49.5535, 25.5948],
-            'Lutsk': [50.7472, 25.3254],
-            'Uzhhorod': [48.6208, 22.2879]
-        };
+        (function () {
+            'use strict';
 
-        let map;
-        let markers = [];
-        let products = [];
-        let categories = [];
-        let cities = [];
-        let selectedCity = '';
-        let selectedCategory = '';
+            let arthingsMap;
+            let listingType = new URLSearchParams(location.search).get('type') || '';
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            await checkAuth();
-            initMap();
-            await loadConfig();
-            await loadProducts();
-            setupEventListeners();
-        });
+            const els = {
+                loading: document.getElementById('map-loading'),
+                results: document.getElementById('map-results'),
+                count: document.getElementById('results-count'),
+                housingFilters: document.getElementById('housing-filters'),
+                radiusHint: document.getElementById('radius-hint'),
+                radius: document.getElementById('filter-radius'),
+                nearMe: document.getElementById('btn-near-me')
+            };
 
-        function initMap() {
-            // Initialize map centered on Ukraine
-            map = L.map('map', {
-                center: [48.3794, 31.1656],
-                zoom: 6,
-                zoomControl: true
-            });
+            /** Reads every control into the flat filter object the API expects. */
+            function collectFilters() {
+                const value = id => {
+                    const el = document.getElementById(id);
+                    return el && el.value !== '' ? el.value : undefined;
+                };
+                const checked = id => {
+                    const el = document.getElementById(id);
+                    return el && el.checked ? 'true' : undefined;
+                };
 
-            // Add OpenStreetMap tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                maxZoom: 19
-            }).addTo(map);
+                const filters = {
+                    listingType: listingType || undefined,
+                    category: value('filter-category'),
+                    minPrice: value('filter-min-price'),
+                    maxPrice: value('filter-max-price'),
+                    minRating: value('filter-rating'),
+                    verifiedOwner: checked('filter-verified'),
+                    radiusKm: value('filter-radius')
+                };
 
-            // Custom zoom control position
-            map.zoomControl.setPosition('bottomright');
-        }
-
-        async function loadConfig() {
-            try {
-                const data = await api.get('/api/config');
-                categories = data.categories || [];
-                cities = data.cities || [];
-
-                // Populate city filter
-                const citySelect = document.getElementById('city-filter');
-                cities.forEach(city => {
-                    const option = document.createElement('option');
-                    option.value = city;
-                    option.textContent = city;
-                    citySelect.appendChild(option);
-                });
-
-                // Populate category filter
-                const categorySelect = document.getElementById('category-filter');
-                categories.forEach(cat => {
-                    const option = document.createElement('option');
-                    option.value = cat.id;
-                    option.textContent = `${cat.icon} ${i18n.getLanguage() === 'uk' ? cat.nameUk : cat.name}`;
-                    categorySelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Failed to load config:', error);
-            }
-        }
-
-        async function loadProducts() {
-            try {
-                const params = new URLSearchParams();
-                if (selectedCity) params.set('city', selectedCity);
-                if (selectedCategory) params.set('category', selectedCategory);
-
-                const minPrice = document.getElementById('min-price').value;
-                const maxPrice = document.getElementById('max-price').value;
-                if (minPrice) params.set('minPrice', minPrice);
-                if (maxPrice) params.set('maxPrice', maxPrice);
-
-                const queryString = params.toString();
-                const data = await api.get(`/api/products${queryString ? '?' + queryString : ''}`);
-                products = data.products || [];
-
-                renderResults();
-                updateMapMarkers();
-            } catch (error) {
-                showToast('error', error.message);
-            }
-        }
-
-        function renderResults() {
-            const container = document.getElementById('map-results');
-            const header = document.getElementById('results-header');
-
-            if (products.length === 0) {
-                header.textContent = 'No items found';
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 12px; opacity: 0.5;">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <p>No items match your filters</p>
-                        <button class="btn btn-ghost" style="margin-top: 12px;" onclick="clearFilters()">Clear Filters</button>
-                    </div>
-                `;
-                return;
-            }
-
-            const key = products.length === 1 ? 'search.foundSingle' : 'search.found';
-            let text = i18n.t(key).replace('{count}', products.length);
-            if (selectedCity) {
-                text += i18n.t('search.inCity').replace('{city}', selectedCity);
-            }
-            header.textContent = text;
-
-            container.innerHTML = products.map(product => {
-                const imageUrl = product.images && product.images.length > 0
-                    ? product.images[0]
-                    : '/assets/images/placeholder.png';
-
-                return `
-                    <div class="map-result-item" data-product-id="${product.id}" onclick="focusProduct('${product.id}')">
-                        <div class="map-result-image">
-                            <img src="${imageUrl}" alt="${escapeHtml(product.title)}" onerror="this.src='/assets/images/placeholder.png'">
-                        </div>
-                        <div class="map-result-info">
-                            <h4>${escapeHtml(product.title)}</h4>
-                            <p class="location">📍 ${escapeHtml(product.city)}</p>
-                            <p class="price">₴${product.price} <span>${i18n.t('product.perDay')}</span></p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function updateMapMarkers() {
-            // Clear existing markers
-            markers.forEach(marker => map.removeLayer(marker));
-            markers = [];
-
-            if (products.length === 0) return;
-
-            // Group products by city
-            const productsByCity = {};
-            products.forEach(product => {
-                if (!productsByCity[product.city]) {
-                    productsByCity[product.city] = [];
+                const from = value('filter-from');
+                const to = value('filter-to');
+                // The API only applies an availability window when both ends
+                // are present, so sending half of one would silently do nothing.
+                if (from && to) {
+                    filters.availableFrom = from;
+                    filters.availableTo = to;
                 }
-                productsByCity[product.city].push(product);
-            });
 
-            // Create markers for each city
-            Object.entries(productsByCity).forEach(([city, cityProducts]) => {
-                const coords = cityCoordinates[city];
-                if (!coords) return;
+                if (listingType === 'housing') {
+                    filters.minRooms = value('filter-min-rooms');
+                    filters.maxRooms = value('filter-max-rooms');
+                    filters.petsAllowed = checked('filter-pets');
+                    filters.studentsAllowed = checked('filter-students');
+                    filters.hasParking = checked('filter-parking');
+                    filters.hasInternet = checked('filter-internet');
+                }
 
-                // Add slight offset for multiple products in same city
-                cityProducts.forEach((product, index) => {
-                    const offset = index * 0.002;
-                    const lat = coords[0] + (Math.random() - 0.5) * 0.01;
-                    const lng = coords[1] + (Math.random() - 0.5) * 0.01;
+                return filters;
+            }
 
-                    const imageUrl = product.images && product.images.length > 0
-                        ? product.images[0]
-                        : '/assets/images/placeholder.png';
+            function setLoading(isLoading) {
+                els.loading.hidden = !isLoading;
+            }
 
-                    // Create custom icon
-                    const customIcon = L.divIcon({
-                        className: 'custom-marker',
-                        html: `<div class="city-marker">₴${product.price}</div>`,
-                        iconSize: [40, 40],
-                        iconAnchor: [20, 40],
-                        popupAnchor: [0, -40]
-                    });
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
 
-                    const marker = L.marker([lat, lng], { icon: customIcon })
-                        .addTo(map)
-                        .bindPopup(`
-                            <div class="map-popup">
-                                <img src="${imageUrl}" alt="${escapeHtml(product.title)}" class="map-popup-image" onerror="this.src='/assets/images/placeholder.png'">
-                                <div class="map-popup-content">
-                                    <div class="map-popup-title">${escapeHtml(product.title)}</div>
-                                    <div class="map-popup-price">₴${product.price} <span>${i18n.t('product.perDay')}</span></div>
-                                    <a href="/pages/item.html?id=${product.id}" class="map-popup-link">View Details</a>
+            /** Sidebar list mirroring the visible markers. */
+            function renderResults(markers) {
+                els.count.textContent = markers.length
+                    ? `Знайдено: ${markers.length}`
+                    : 'Нічого не знайдено';
+
+                if (!markers.length) {
+                    els.results.innerHTML =
+                        '<div class="map-empty">Немає оголошень у цій області.<br>Спробуйте змінити фільтри або відсунути карту.</div>';
+                    return;
+                }
+
+                els.results.innerHTML = markers.map(marker => {
+                    const image = marker.image
+                        ? `<img class="map-result-image" src="${escapeHtml(marker.image)}" alt="" loading="lazy">`
+                        : '<div class="map-result-image"></div>';
+                    const location = [marker.street, marker.village || marker.city]
+                        .filter(Boolean).join(', ');
+                    const distance = marker.distanceKm !== null && marker.distanceKm !== undefined
+                        ? `<span>📍 ${marker.distanceKm} км</span>` : '';
+                    const rating = marker.ownerRatingCount
+                        ? `<span>★ ${Number(marker.ownerRating).toFixed(1)}</span>` : '';
+
+                    return `
+                        <a class="map-result-card" href="/pages/item.html?id=${encodeURIComponent(marker.id)}"
+                           data-lat="${marker.latitude}" data-lng="${marker.longitude}">
+                            ${image}
+                            <div class="map-result-body">
+                                <div class="map-result-title">${escapeHtml(marker.title)}</div>
+                                <div class="map-result-price">${escapeHtml(String(marker.price))}₴</div>
+                                <div class="map-result-meta">
+                                    ${location ? `<span>${escapeHtml(location)}</span>` : ''}
+                                    ${rating}${distance}
                                 </div>
                             </div>
-                        `, {
-                            maxWidth: 250,
-                            className: 'custom-popup'
-                        });
+                        </a>`;
+                }).join('');
+            }
 
-                    marker.productId = product.id;
-                    markers.push(marker);
+            async function applyFilters() {
+                setLoading(true);
+                try {
+                    await arthingsMap.setFilters(collectFilters());
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            /** Populates the category dropdown from the server config. */
+            async function loadCategories() {
+                try {
+                    const config = await api.get('/api/config');
+                    const select = document.getElementById('filter-category');
+                    const isUk = window.i18n ? i18n.getLanguage() === 'uk' : true;
+
+                    for (const category of config.categories || []) {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = `${category.icon} ${isUk ? category.nameUk : category.name}`;
+                        select.appendChild(option);
+                    }
+                } catch (error) {
+                    console.error('Failed to load categories:', error);
+                }
+            }
+
+            function bindControls() {
+                const debounced = (() => {
+                    let timer;
+                    return () => {
+                        clearTimeout(timer);
+                        timer = setTimeout(applyFilters, 300);
+                    };
+                })();
+
+                [
+                    'filter-category', 'filter-min-price', 'filter-max-price', 'filter-rating',
+                    'filter-verified', 'filter-from', 'filter-to', 'filter-min-rooms',
+                    'filter-max-rooms', 'filter-pets', 'filter-students', 'filter-parking',
+                    'filter-internet'
+                ].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('change', debounced);
                 });
-            });
 
-            // Fit map to markers if we have any
-            if (markers.length > 0) {
-                const group = L.featureGroup(markers);
-                map.fitBounds(group.getBounds().pad(0.1));
+                els.radius.addEventListener('change', () => {
+                    if (els.radius.value && !arthingsMap.userLocation) {
+                        // A radius is meaningless without an origin.
+                        els.nearMe.click();
+                        return;
+                    }
+                    applyFilters();
+                });
+
+                // Listing-type chips.
+                document.getElementById('type-chips').addEventListener('click', event => {
+                    const chip = event.target.closest('[data-type]');
+                    if (!chip) return;
+
+                    document.querySelectorAll('#type-chips .map-chip')
+                        .forEach(el => el.classList.remove('is-active'));
+                    chip.classList.add('is-active');
+
+                    listingType = chip.dataset.type;
+                    els.housingFilters.hidden = listingType !== 'housing';
+                    applyFilters();
+                });
+
+                document.getElementById('search-in-view').addEventListener('change', event => {
+                    arthingsMap.setSearchOnMove(event.target.checked);
+                    if (event.target.checked) applyFilters();
+                });
+
+                els.nearMe.addEventListener('click', async () => {
+                    els.nearMe.disabled = true;
+                    els.nearMe.textContent = 'Визначаємо…';
+                    try {
+                        await arthingsMap.locateUser();
+                        els.radiusHint.textContent = 'Місцезнаходження визначено';
+                        els.nearMe.classList.add('is-active');
+                        if (!els.radius.value) els.radius.value = '10';
+                        await applyFilters();
+                    } catch (error) {
+                        els.radiusHint.textContent = error.message;
+                    } finally {
+                        els.nearMe.disabled = false;
+                        els.nearMe.textContent = '📍 Поруч зі мною';
+                    }
+                });
+
+                document.getElementById('btn-reset').addEventListener('click', () => {
+                    document.querySelectorAll('.map-filters input').forEach(input => {
+                        if (input.type === 'checkbox') input.checked = false;
+                        else input.value = '';
+                    });
+                    document.querySelectorAll('.map-filters select').forEach(select => {
+                        select.value = '';
+                    });
+                    els.nearMe.classList.remove('is-active');
+                    applyFilters();
+                });
+
+                // Hovering a result pans the map to it.
+                els.results.addEventListener('mouseover', event => {
+                    const card = event.target.closest('.map-result-card');
+                    if (!card) return;
+                    const lat = Number(card.dataset.lat);
+                    const lng = Number(card.dataset.lng);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                        arthingsMap.map.panTo([lat, lng], { animate: true, duration: 0.3 });
+                    }
+                });
             }
-        }
 
-        function focusProduct(productId) {
-            // Highlight in sidebar
-            document.querySelectorAll('.map-result-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.productId === productId);
-            });
+            document.addEventListener('DOMContentLoaded', async () => {
+                if (typeof checkAuth === 'function') checkAuth();
 
-            // Find and open marker popup
-            const marker = markers.find(m => m.productId === productId);
-            if (marker) {
-                map.setView(marker.getLatLng(), 12, { animate: true });
-                marker.openPopup();
-            }
-        }
+                arthingsMap = new ArthingsMap({
+                    container: 'map',
+                    endpoint: '/api/products/map',
+                    onResults: renderResults,
+                    onError: () => {
+                        els.count.textContent = 'Помилка завантаження';
+                        els.results.innerHTML =
+                            '<div class="map-empty">Не вдалося завантажити оголошення.</div>';
+                    }
+                });
 
-        function clearFilters() {
-            document.getElementById('city-filter').value = '';
-            document.getElementById('category-filter').value = '';
-            document.getElementById('min-price').value = '';
-            document.getElementById('max-price').value = '';
-            selectedCity = '';
-            selectedCategory = '';
-            loadProducts();
-        }
+                attachMapAutocomplete({
+                    input: document.getElementById('map-search'),
+                    resultsContainer: document.getElementById('map-suggestions'),
+                    onSelect: suggestion => {
+                        // fitBounds/flyTo fires moveend, which re-queries.
+                        arthingsMap.goToSuggestion(suggestion);
+                    }
+                });
 
-        function setupEventListeners() {
-            // City filter
-            document.getElementById('city-filter').addEventListener('change', (e) => {
-                selectedCity = e.target.value;
-
-                // Fly to city on map
-                if (selectedCity && cityCoordinates[selectedCity]) {
-                    map.flyTo(cityCoordinates[selectedCity], 11, { animate: true, duration: 1 });
-                } else {
-                    map.flyTo([48.3794, 31.1656], 6, { animate: true, duration: 1 });
+                // Preselect the housing view when arriving from the housing nav.
+                if (listingType) {
+                    const chip = document.querySelector(`#type-chips [data-type="${listingType}"]`);
+                    if (chip) {
+                        document.querySelectorAll('#type-chips .map-chip')
+                            .forEach(el => el.classList.remove('is-active'));
+                        chip.classList.add('is-active');
+                    }
+                    els.housingFilters.hidden = listingType !== 'housing';
                 }
 
-                loadProducts();
+                bindControls();
+                await loadCategories();
+                await applyFilters();
             });
-
-            // Category filter
-            document.getElementById('category-filter').addEventListener('change', (e) => {
-                selectedCategory = e.target.value;
-                loadProducts();
-            });
-
-            // Price filters
-            document.getElementById('min-price').addEventListener('change', () => loadProducts());
-            document.getElementById('max-price').addEventListener('change', () => loadProducts());
-
-            // Apply filters button
-            document.getElementById('apply-filters-btn').addEventListener('click', () => {
-                loadProducts();
-            });
-        }
+        })();
     </script>
 </body>
 

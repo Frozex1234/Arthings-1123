@@ -154,7 +154,7 @@
                     submitBtn.disabled = true;
                     submitBtn.textContent = i18n.t('common.loading');
 
-                    await api.post('/api/auth/register', {
+                    const result = await api.post('/api/auth/register', {
                         name,
                         email,
                         password,
@@ -169,10 +169,14 @@
 
                     showToast('success', i18n.t('toast.registerSuccess'));
 
-                    // Redirect to login
+                    // The account is inactive until the emailed code is
+                    // entered, so send the user to the verification step
+                    // rather than a login form that would reject them.
                     setTimeout(() => {
-                        window.location.href = '/pages/login.html';
-                    }, 1000);
+                        window.location.href = result.requiresVerification
+                            ? `/pages/verify-email.html?email=${encodeURIComponent(result.email || email)}`
+                            : '/pages/login.html';
+                    }, 800);
 
                 } catch (error) {
                     showToast('error', error.message);

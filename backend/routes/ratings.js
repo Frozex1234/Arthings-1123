@@ -5,6 +5,7 @@
 
 const express = require('express');
 const prisma = require('../db/db');
+const notifications = require('../services/notifications');
 
 const router = express.Router();
 
@@ -80,18 +81,50 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'You have already rated this user for this rental' });
         }
 
-        const rating = await prisma.rating.create({
-            data: {
-                rentalId,
-                fromUserId: req.session.userId,
-                toUserId,
-                score: Math.min(5, Math.max(1, parseInt(score, 10))),
-                comment: comment ? String(comment).trim().slice(0, 1000) : null
-            },
-            include: {
-                toUser: { select: { id: true, name: true } }
-            }
+        const rating = await prisma.$transaction(async tx => {
+            const created = await tx.rating.create({
+                data: {
+                    rentalId,
+                    fromUserId: req.session.userId,
+                    toUserId,
+                    score: Math.min(5, Math.max(1, parseInt(score, 10))),
+                    comment: comment ? String(comment).trim().slice(0, 1000) : null
+                },
+                include: {
+                    toUser: { select: { id: true, name: true } }
+                }
+            });
+
+            // Refresh the denormalised aggregates the listing and map queries
+            // read. Recomputed from source rather than incrementally adjusted,
+            // so the stored value cannot drift out of sync with the rows.
+            const aggregate = await tx.rating.aggregate({
+                where: { toUserId },
+                _avg: { score: true },
+                _count: { score: true }
+            });
+
+            await tx.user.update({
+                where: { id: toUserId },
+                data: {
+                    ratingAvg: Number((aggregate._avg.score ?? 0).toFixed(2)),
+                    ratingCount: aggregate._count.score
+                }
+            });
+
+            return created;
         });
+
+        // Best-effort: a failed notification must not undo the rating.
+        notifications
+            .notify({
+                userId: toUserId,
+                type: 'rating_received',
+                title: `Ви отримали оцінку ${rating.score}★`,
+                body: rating.comment,
+                link: '/pages/profile.html'
+            })
+            .catch(() => {});
 
         res.status(201).json({
             message: 'Rating submitted',

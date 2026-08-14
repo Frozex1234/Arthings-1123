@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Підтвердьте свою електронну пошту Arthings">
+    <title>Підтвердження пошти - Arthings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <link rel="icon" type="image/png" href="/assets/images/logo.png">
+    <style>
+        .code-input {
+            width: 100%;
+            text-align: center;
+            font-size: 1.85rem;
+            font-weight: 700;
+            letter-spacing: 0.45em;
+            text-indent: 0.45em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            padding: 0.9rem 0.5rem;
+        }
+
+        .verify-email-label {
+            font-weight: 600;
+            color: #111827;
+            word-break: break-all;
+        }
+
+        .resend-row {
+            display: flex;
+            justify-content: center;
+            gap: 0.4rem;
+            align-items: center;
+            margin-top: 1.25rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .link-button {
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+            font-weight: 600;
+            color: #00817f;
+            cursor: pointer;
+        }
+
+        .link-button:disabled {
+            color: #9ca3af;
+            cursor: default;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="auth-header">
+                <a href="/" class="logo">
+                    <img src="/assets/images/logo.png" alt="Arthings" width="56" height="56">
+                </a>
+                <h1>Підтвердьте пошту</h1>
+                <p>Ми надіслали код на <span class="verify-email-label" id="email-label">вашу пошту</span></p>
+            </div>
+
+            <form id="verify-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label" for="code">Код підтвердження</label>
+                    <input type="text" id="code" class="form-input code-input" inputmode="numeric"
+                        autocomplete="one-time-code" maxlength="6" placeholder="000000" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+                    Підтвердити
+                </button>
+            </form>
+
+            <div class="resend-row">
+                <span>Не отримали код?</span>
+                <button type="button" id="resend-btn" class="link-button">Надіслати ще раз</button>
+            </div>
+
+            <div class="auth-footer">
+                <a href="/pages/login.html">Повернутися до входу</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/assets/js/i18n.js"></script>
+    <script src="/assets/js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const email = getUrlParam('email');
+            const codeInput = document.getElementById('code');
+            const resendBtn = document.getElementById('resend-btn');
+
+            // Without an address there is nothing to verify against.
+            if (!email) {
+                window.location.href = '/pages/register.html';
+                return;
+            }
+
+            document.getElementById('email-label').textContent = email;
+            codeInput.focus();
+
+            // Codes are numeric; strip anything else as it is typed or pasted.
+            codeInput.addEventListener('input', () => {
+                codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+                clearFormError(codeInput);
+            });
+
+            document.getElementById('verify-form').addEventListener('submit', async event => {
+                event.preventDefault();
+
+                const code = codeInput.value.trim();
+                if (code.length < 4) {
+                    showFormError(codeInput, 'Введіть код з листа');
+                    return;
+                }
+
+                const button = event.target.querySelector('button[type="submit"]');
+                button.disabled = true;
+                button.textContent = 'Перевіряємо…';
+
+                try {
+                    await api.post('/api/auth/verify-email', { email, code });
+                    showToast('success', 'Пошту підтверджено');
+                    // The server signs the user in on success.
+                    setTimeout(() => { window.location.href = '/'; }, 600);
+                } catch (error) {
+                    showToast('error', error.message);
+                    codeInput.value = '';
+                    codeInput.focus();
+                    button.disabled = false;
+                    button.textContent = 'Підтвердити';
+                }
+            });
+
+            /** Disables the resend button for the server-side cooldown. */
+            function startCooldown(seconds) {
+                let remaining = seconds;
+                resendBtn.disabled = true;
+
+                const tick = () => {
+                    resendBtn.textContent = remaining > 0
+                        ? `Надіслати ще раз (${remaining})`
+                        : 'Надіслати ще раз';
+                    if (remaining <= 0) {
+                        resendBtn.disabled = false;
+                        clearInterval(timer);
+                    }
+                    remaining -= 1;
+                };
+
+                const timer = setInterval(tick, 1000);
+                tick();
+            }
+
+            resendBtn.addEventListener('click', async () => {
+                resendBtn.disabled = true;
+                try {
+                    await api.post('/api/auth/resend-verification', { email });
+                    showToast('success', 'Новий код надіслано');
+                    startCooldown(60);
+                } catch (error) {
+                    showToast('error', error.message);
+                    // The server reports how long is left when rate limited.
+                    startCooldown(error.status === 429 ? 60 : 5);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

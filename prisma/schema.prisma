@@ -1,8 +1,8 @@
 // ===========================================
 // Arthings - Prisma Schema
 // ===========================================
-// This file defines the database schema for the Arthings rental platform.
-// Heroku Postgres is used as the database provider.
+// This file defines the database schema for the Arthings rental marketplace.
+// Provider: PostgreSQL (Neon).
 
 generator client {
   provider = "prisma-client-js"
@@ -26,65 +26,226 @@ model User {
   phone        String?  @db.VarChar(50)
   city         String?  @db.VarChar(100)
   avatar       String?  @db.VarChar(500)
-  isVerified   Boolean  @default(false) @map("is_verified")
-  isAdmin      Boolean  @default(false) @map("is_admin")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // `isVerified` is the trust badge shown on listings (identity confirmed by
+  // staff). Email confirmation is tracked separately by `emailVerifiedAt` so
+  // the two cannot be conflated.
+  isVerified      Boolean   @default(false) @map("is_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  isAdmin         Boolean   @default(false) @map("is_admin")
+
+  // Denormalised rating aggregates. Maintained on rating write so listing and
+  // map queries never need a correlated AVG() over the ratings table.
+  ratingAvg   Decimal @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount Int     @default(0) @map("rating_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   items              Item[]
-  rentalsAsRenter    Rental[]        @relation("RenterRentals")
+  rentalsAsRenter    Rental[]            @relation("RenterRentals")
   favorites          Favorite[]
   legalConsents      LegalConsent[]
-  ratingsGiven       Rating[]        @relation("RatingFrom")
-  ratingsReceived    Rating[]        @relation("RatingTo")
+  ratingsGiven       Rating[]            @relation("RatingFrom")
+  ratingsReceived    Rating[]            @relation("RatingTo")
   rentalRequests     RentalRequest[]
-  messagesSent       Message[]       @relation("MessagesSent")
-  messagesReceived   Message[]       @relation("MessagesReceived")
+  messagesSent       Message[]           @relation("MessagesSent")
+  messagesReceived   Message[]           @relation("MessagesReceived")
+  verificationTokens VerificationToken[]
+  notifications      Notification[]
+  rentalEvents       RentalEvent[]
 
+  @@index([emailVerifiedAt])
   @@map("users")
 }
 
 // ===========================================
-// Item Model
+// Verification Token Model
 // ===========================================
-// Stores all rentable items on the platform
+// Backs email confirmation and password reset. Only the *hash* of the secret
+// is stored, so a database leak cannot be replayed to take over accounts.
+
+enum VerificationPurpose {
+  email_verification
+  password_reset
+}
+
+model VerificationToken {
+  id        Int                 @id @default(autoincrement())
+  userId    Int                 @map("user_id")
+  purpose   VerificationPurpose
+  tokenHash String              @map("token_hash") @db.VarChar(255)
+
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+
+  // Guards against brute-forcing a short numeric code.
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+  @@map("verification_tokens")
+}
+
+// ===========================================
+// Listing (Item) Model
+// ===========================================
+// A single table backs both rentable items and housing. `listingType` is the
+// discriminator: images, favourites, ratings, messages and rentals all hang
+// off this model, so splitting housing into its own table would fork every
+// one of those subsystems.
+
+enum ListingType {
+  item
+  housing
+}
+
+/// Structural property type. Rental term and tenant policy are separate
+/// fields so combinations like "monthly pet-friendly apartment" stay
+/// representable; the browsable category list in the UI is composed from all
+/// three axes.
+enum HousingCategory {
+  apartment
+  house
+  room
+  hostel
+  commercial
+  garage
+}
+
+enum RentalPeriod {
+  daily
+  weekly
+  monthly
+  short_term
+  long_term
+}
 
 model Item {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @map("user_id")
-  title       String   @db.VarChar(255)
-  description String   @db.Text
-  pricePerDay Decimal  @map("price_per_day") @db.Decimal(10, 2)
-  priceUnit   String   @default("day") @map("price_unit") @db.VarChar(20)
-  category    String   @db.VarChar(50)
-  city        String?  @db.VarChar(100)
-  address     String?  @db.VarChar(255)
-  housingType String?  @map("housing_type") @db.VarChar(30)
-  rooms       Int?
-  area        Decimal? @db.Decimal(8, 2)
-  floor       Int?
-  totalFloors Int?     @map("total_floors")
-  isFurnished Boolean? @map("is_furnished")
-  petsAllowed Boolean? @map("pets_allowed")
-  studentsAllowed Boolean @default(false) @map("students_allowed")
+  id          Int         @id @default(autoincrement())
+  userId      Int         @map("user_id")
+  listingType ListingType @default(item) @map("listing_type")
+
+  title       String  @db.VarChar(255)
+  description String  @db.Text
+  pricePerDay Decimal @map("price_per_day") @db.Decimal(10, 2)
+  priceUnit   String  @default("day") @map("price_unit") @db.VarChar(20)
+  category    String  @db.VarChar(50)
+
+  // ---- Structured address -------------------------------------------------
+  // `city` predates this model and is kept as the free-text display value so
+  // existing rows and queries keep working; the fields below are the
+  // authoritative structured form used for geocoding.
+  city        String? @db.VarChar(100)
+  address     String? @db.VarChar(255)
+  country     String  @default("Ukraine") @db.VarChar(100)
+  region      String? @db.VarChar(120)
+  district    String? @db.VarChar(120)
+  village     String? @db.VarChar(120)
+  street      String? @db.VarChar(160)
+  houseNumber String? @map("house_number") @db.VarChar(30)
+  postcode    String? @db.VarChar(20)
+
+  // ---- Geocoding ----------------------------------------------------------
+  // Coordinates are resolved once on write and cached here, so rendering the
+  // map never triggers an outbound geocoding request.
+  latitude        Float?    @db.DoublePrecision
+  longitude       Float?    @db.DoublePrecision
+  geocodedAt      DateTime? @map("geocoded_at")
+  geocodeAccuracy String?   @map("geocode_accuracy") @db.VarChar(30)
+  geocodeQuery    String?   @map("geocode_query") @db.VarChar(500)
+
+  // ---- Housing attributes -------------------------------------------------
+  housingType       String?          @map("housing_type") @db.VarChar(30)
+  housingCategory   HousingCategory? @map("housing_category")
+  rentalPeriod      RentalPeriod?    @map("rental_period")
+  rooms             Int?
+  area              Decimal?         @db.Decimal(8, 2)
+  floor             Int?
+  totalFloors       Int?             @map("total_floors")
+  maxGuests         Int?             @map("max_guests")
+  isFurnished       Boolean?         @map("is_furnished")
+  petsAllowed       Boolean?         @map("pets_allowed")
+  smokingAllowed    Boolean?         @map("smoking_allowed")
+  hasInternet       Boolean?         @map("has_internet")
+  hasParking        Boolean?         @map("has_parking")
+  utilitiesIncluded Boolean?         @map("utilities_included")
+  studentsAllowed   Boolean          @default(false) @map("students_allowed")
+
   isAvailable Boolean  @default(true) @map("is_available")
   views       Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  images    ItemImage[]
-  rentals   Rental[]
-  favorites Favorite[]
-  messages  Message[]
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images       ItemImage[]
+  rentals      Rental[]
+  favorites    Favorite[]
+  messages     Message[]
+  availability ItemAvailability[]
 
   @@index([userId])
   @@index([category])
   @@index([city])
   @@index([studentsAllowed])
+  @@index([listingType, isAvailable])
+  @@index([listingType, category])
+  @@index([housingCategory])
+  @@index([rentalPeriod])
+  // Bounding-box map queries filter on both axes together.
+  @@index([latitude, longitude])
   @@map("items")
+}
+
+// ===========================================
+// Item Availability Model
+// ===========================================
+// Owner-declared blocked ranges (maintenance, personal use, external
+// bookings). Confirmed rentals block dates on their own; this covers
+// everything that is unavailable without a corresponding Rental row.
+
+model ItemAvailability {
+  id        Int      @id @default(autoincrement())
+  itemId    Int      @map("item_id")
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  reason    String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, startDate, endDate])
+  @@map("item_availability")
+}
+
+// ===========================================
+// Geocode Cache Model
+// ===========================================
+// Nominatim's usage policy caps clients at one request per second and
+// requires aggressive caching. Keyed by a normalised query string so repeated
+// addresses (and autocomplete queries) never leave the server twice.
+
+model GeocodeCache {
+  id          Int      @id @default(autoincrement())
+  queryKey    String   @unique @map("query_key") @db.VarChar(500)
+  latitude    Float    @db.DoublePrecision
+  longitude   Float    @db.DoublePrecision
+  displayName String?  @map("display_name") @db.VarChar(500)
+  accuracy    String?  @db.VarChar(30)
+  /// Raw provider payload, retained so richer results can be re-derived
+  /// without another network round-trip.
+  payload     Json?
+  hits        Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("geocode_cache")
 }
 
 // ===========================================
@@ -93,13 +254,13 @@ model Item {
 // Private messages between platform users. A message can be linked to a listing.
 
 model Message {
-  id         Int      @id @default(autoincrement())
-  senderId   Int      @map("sender_id")
-  recipientId Int     @map("recipient_id")
-  itemId     Int?     @map("item_id")
-  body       String   @db.Text
-  readAt     DateTime? @map("read_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          Int       @id @default(autoincrement())
+  senderId    Int       @map("sender_id")
+  recipientId Int       @map("recipient_id")
+  itemId      Int?      @map("item_id")
+  body        String    @db.Text
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   sender    User  @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
   recipient User  @relation("MessagesReceived", fields: [recipientId], references: [id], onDelete: Cascade)
@@ -133,7 +294,9 @@ model ItemImage {
 // ===========================================
 // Rental Model
 // ===========================================
-// Tracks the rental lifecycle
+// Tracks the rental request lifecycle. Enum values are unchanged so existing
+// rows stay valid; the API layer exposes `accepted`/`rejected` aliases for
+// `approved`/`declined`.
 
 enum RentalStatus {
   pending
@@ -154,18 +317,85 @@ model Rental {
   totalPrice  Decimal      @map("total_price") @db.Decimal(10, 2)
   message     String?      @db.Text
   status      RentalStatus @default(pending)
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // ---- Lifecycle metadata -------------------------------------------------
+  ownerResponse String?   @map("owner_response") @db.Text
+  respondedAt   DateTime? @map("responded_at")
+  cancelledAt   DateTime? @map("cancelled_at")
+  cancelledById Int?      @map("cancelled_by_id")
+  completedAt   DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  item    Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  renter  User    @relation("RenterRentals", fields: [renterId], references: [id], onDelete: Cascade)
+  item    Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  renter  User          @relation("RenterRentals", fields: [renterId], references: [id], onDelete: Cascade)
   ratings Rating[]
+  events  RentalEvent[]
 
   @@index([itemId])
   @@index([renterId])
   @@index([status])
+  // Supports the overlap check that prevents double-booking.
+  @@index([itemId, status, startDate, endDate])
   @@map("rentals")
+}
+
+// ===========================================
+// Rental Event Model
+// ===========================================
+// Append-only status timeline. Every transition writes a row, giving both
+// parties an auditable history rather than a single mutable status field.
+
+model RentalEvent {
+  id        Int           @id @default(autoincrement())
+  rentalId  Int           @map("rental_id")
+  actorId   Int?          @map("actor_id")
+  status    RentalStatus
+  note      String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  rental Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([rentalId, createdAt])
+  @@map("rental_events")
+}
+
+// ===========================================
+// Notification Model
+// ===========================================
+// In-app notification feed. Delivery over email is handled separately by the
+// mail service; this table is what the bell icon reads.
+
+enum NotificationType {
+  rental_requested
+  rental_accepted
+  rental_rejected
+  rental_cancelled
+  rental_completed
+  message_received
+  rating_received
+  system
+}
+
+model Notification {
+  id     Int              @id @default(autoincrement())
+  userId Int              @map("user_id")
+  type   NotificationType
+  title  String           @db.VarChar(255)
+  body   String?          @db.Text
+  /// Relative in-app path the notification links to.
+  link   String?          @db.VarChar(500)
+
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }
 
 // ===========================================
@@ -174,18 +404,18 @@ model Rental {
 // Ratings given after completed rentals (owner rates renter, renter rates owner)
 
 model Rating {
-  id        Int      @id @default(autoincrement())
-  rentalId  Int      @map("rental_id")
-  fromUserId Int     @map("from_user_id")
-  toUserId  Int      @map("to_user_id")
-  score     Int      // 1-5
-  comment   String?  @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  id         Int      @id @default(autoincrement())
+  rentalId   Int      @map("rental_id")
+  fromUserId Int      @map("from_user_id")
+  toUserId   Int      @map("to_user_id")
+  score      Int // 1-5
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
 
   // Relations
-  rental    Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
-  fromUser  User   @relation("RatingFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser    User   @relation("RatingTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  rental   Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  fromUser User   @relation("RatingFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User   @relation("RatingTo", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@unique([rentalId, fromUserId, toUserId])
   @@index([toUserId])
@@ -196,7 +426,8 @@ model Rating {
 // ===========================================
 // Rental Request Model
 // ===========================================
-// "I want to rent X" - public requests so owners can see demand
+// Public "I am looking for X" demand posts. Unrelated to the Rental booking
+// workflow despite the similar name.
 
 model RentalRequest {
   id          Int      @id @default(autoincrement())
@@ -276,7 +507,8 @@ model Category {
 // ===========================================
 // City Model
 // ===========================================
-// Predefined list of cities
+// Seed list used for legacy dropdowns. Map search resolves settlements live
+// from OpenStreetMap instead of this table.
 
 model City {
   id   Int    @id @default(autoincrement())

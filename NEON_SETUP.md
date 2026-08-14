@@ -24,7 +24,9 @@
 DATABASE_URL="postgresql://neon_user:password@ep-xyz.neon.tech/dbname?sslmode=require"
 
 # Session Configuration
-SESSION_SECRET=arthings-secret-key-2025
+# Згенеруйте власний секрет: openssl rand -hex 32
+# Ніколи не використовуйте це значення повторно і не комітьте його.
+SESSION_SECRET=
 
 # Server Configuration
 PORT=3000
